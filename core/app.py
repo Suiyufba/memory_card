@@ -27,7 +27,7 @@ def login():
     data = request.get_json()
     username = data.get('username')
     password = data.get('password')
-    if username == 'suiyufba' and password == 'ljq000413':
+    if username == 'admin' and password == '123456':
         session['logged_in'] = True
         return jsonify({'success': True, 'message': '登录成功'})
     else:
