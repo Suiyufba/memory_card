@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, jsonify, session
+from flask import Flask, render_template, request, redirect, url_for, jsonify, session, send_file
 import os
 import json
 import random
@@ -49,7 +49,7 @@ def login_required(f):
 
 @app.route('/', methods=['GET'])
 def index():
-    return render_template('index.html')
+    return send_file('../html/index.html')
 
 @app.route('/add', methods=['POST'])
 @login_required
@@ -57,6 +57,7 @@ def add_card():
     title = request.form.get('title')
     content = request.form.get('content')
     tags = request.form.get('tags', '')
+    img = request.form.get('img', '')
     tag_list = [t.strip() for t in tags.split(',') if t.strip()]
     if not title or not content:
         return redirect(url_for('index'))
@@ -67,6 +68,7 @@ def add_card():
         'title': title,
         'content': content,
         'tags': tag_list,
+        'img': img,
         'review_count': 0,
         'next_review': now,  # 立即可复习
         'last_review': None,
@@ -156,6 +158,7 @@ def edit_card(card_id):
     new_title = data.get('title')
     new_content = data.get('content')
     new_tags = data.get('tags')
+    new_img = data.get('img')
     cards = load_cards()
     found = False
     for card in cards:
@@ -166,6 +169,8 @@ def edit_card(card_id):
                 card['content'] = new_content
             if new_tags is not None:
                 card['tags'] = [t.strip() for t in new_tags if t.strip()]
+            if new_img is not None:
+                card['img'] = new_img
             found = True
             break
     if found:
