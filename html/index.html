@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>Memory Card</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; background: #f7f7f7; }
+        .container { max-width: 500px; margin: auto; background: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 2px 8px #ccc; }
+        h1 { text-align: center; }
+        .card { margin: 20px 0; padding: 20px; border: 1px solid #eee; border-radius: 6px; background: #fafafa; }
+        .btn { padding: 8px 18px; border: none; border-radius: 4px; background: #007bff; color: #fff; cursor: pointer; }
+        .btn:disabled { background: #aaa; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; }
+        input, textarea { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>Memory Card</h1>
+    <form method="post" action="/add">
+        <div class="form-group">
+            <label for="title">Title</label>
+            <input type="text" id="title" name="title" required>
+        </div>
+        <div class="form-group">
+            <label for="content">Content</label>
+            <textarea id="content" name="content" rows="3" required></textarea>
+        </div>
+        <button class="btn" type="submit">Add Card</button>
+    </form>
+    <hr>
+    <div id="draw-section">
+        <button class="btn" id="draw-btn">Draw a Card</button>
+        <div id="card-area" style="margin-top:20px;"></div>
+    </div>
+</div>
+<script>
+    const drawBtn = document.getElementById('draw-btn');
+    const cardArea = document.getElementById('card-area');
+    let currentCardId = null;
+
+    drawBtn.onclick = function() {
+        cardArea.innerHTML = '';
+        fetch('/draw').then(r => r.json()).then(data => {
+            if (!data.success) {
+                cardArea.innerHTML = '<div class="card">' + data.message + '</div>';
+                return;
+            }
+            currentCardId = data.id;
+            cardArea.innerHTML = '<div class="card"><strong>' + data.title + '</strong><br><button class="btn" id="reveal-btn">Show Content</button><div id="content-area"></div></div>';
+            document.getElementById('reveal-btn').onclick = function() {
+                fetch('/reveal/' + currentCardId).then(r => r.json()).then(res => {
+                    if (res.success) {
+                        document.getElementById('content-area').innerHTML = '<hr>' + res.content;
+                        this.disabled = true;
+                    }
+                });
+            };
+        });
+    };
+</script>
+</body>
+</html> 
