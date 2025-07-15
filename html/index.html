@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>记忆卡片</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
     <!-- Vue 3 国内CDN -->
     <script src="https://cdn.bootcdn.net/ajax/libs/vue/3.4.21/vue.global.prod.min.js"></script>
     <!-- Axios 国内CDN -->
@@ -11,34 +11,213 @@
     <!-- Element Plus 国内CDN -->
     <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/element-plus/2.6.2/index.min.css">
     <script src="https://cdn.bootcdn.net/ajax/libs/element-plus/2.6.2/index.full.min.js"></script>
+    <!-- ECharts CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
     <style>
-        body { font-family: Arial, sans-serif; margin: 40px; background: #f7f7f7; }
-        .container { max-width: 1300px; margin: auto; background: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 2px 8px #ccc; }
+        :root {
+            --bg: #f7f7f7;
+            --container-bg: #fff;
+            --text: #222;
+            --card-bg: #fafafa;
+            --border: #eee;
+            --shadow: #ccc;
+            --infobar-bg: rgba(255,255,255,0.95);
+            --infobar-text: #222;
+            --infobar-shadow: 0 2px 8px #eee;
+            --toggle-btn-bg: #f0f0f0;
+            --toggle-btn-text: #222;
+            --toggle-btn-border: #bbb;
+            --back-btn-bg: #fff;
+            --back-btn-text: #333;
+            --back-btn-border: #ccc;
+        }
+        .dark {
+            --bg: #181a1b;
+            --container-bg: #23272e;
+            --text: #e0e0e0;
+            --card-bg: #23272e;
+            --border: #333a44;
+            --shadow: #111;
+            --infobar-bg: rgba(40,42,50,0.98);
+            --infobar-text: #e0e0e0;
+            --infobar-shadow: 0 2px 16px #111;
+            --toggle-btn-bg: #23272e;
+            --toggle-btn-text: #e0e0e0;
+            --toggle-btn-border: #444a55;
+            --back-btn-bg: #23272e;
+            --back-btn-text: #e0e0e0;
+            --back-btn-border: #444a55;
+        }
+        body {
+            font-family: Arial, sans-serif;
+            margin: 40px;
+            background: var(--bg);
+            color: var(--text);
+        }
+        .container {
+            max-width: 1300px;
+            margin: auto;
+            background: var(--container-bg);
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px var(--shadow);
+        }
         h1 { text-align: center; }
-        .card { margin: 20px 0; padding: 20px; border: 1px solid #eee; border-radius: 6px; background: #fafafa; }
+        .card {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: var(--card-bg);
+        }
         .btn { padding: 8px 18px; border: none; border-radius: 4px; background: #007bff; color: #fff; cursor: pointer; }
         .btn:disabled { background: #aaa; }
         .form-group { margin-bottom: 15px; }
         label { display: block; margin-bottom: 5px; }
-        input, textarea { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
+        input, textarea { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; background: var(--container-bg); color: var(--text); }
         .main-flex-row {
             display: flex;
             justify-content: space-between;
             gap: 24px;
             flex-wrap: nowrap;
         }
-        @media (max-width: 1100px) {
-            .main-flex-row { flex-wrap: wrap; }
+        .main-menu-btns {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 32px;
+            min-height: 60vh;
         }
-        @media (max-width: 900px) {
-            .main-flex-row { display: block; }
+        .main-menu-btns .el-button {
+            font-size: 2rem !important;
+            padding: 32px 0 !important;
+            width: 90vw !important;
+            max-width: 400px;
+            border-radius: 16px;
+        }
+        .module-area {
+            max-width: 600px;
+            margin: 32px auto;
+            padding: 24px 12px;
+            background: var(--container-bg);
+            border-radius: 16px;
+            box-shadow: 0 2px 12px var(--shadow);
+        }
+        .module-area h2 {
+            font-size: 2rem;
+            text-align: center;
+            margin-bottom: 24px;
+        }
+        @media (max-width: 600px) {
+            .main-menu-btns .el-button {
+                font-size: 1.3rem !important;
+                padding: 22px 0 !important;
+                width: 98vw !important;
+                max-width: 98vw;
+            }
+            .module-area {
+                max-width: 100vw;
+                margin: 12px 0;
+                border-radius: 0;
+                box-shadow: none;
+                padding: 8px 2px;
+            }
+        }
+        /* 适配 Element Plus 部分控件暗色 */
+        .dark .el-card, .dark .el-dialog, .dark .el-form, .dark .el-input__inner, .dark .el-alert, .dark .el-tag {
+            background: var(--container-bg) !important;
+            color: var(--text) !important;
+            border-color: var(--border) !important;
+        }
+        .dark .el-button--primary, .dark .el-button--success, .dark .el-button--warning, .dark .el-button--danger, .dark .el-button--info {
+            color: #fff !important;
+        }
+        .dark .el-input__wrapper,
+        .dark .el-input__inner,
+        .dark .el-textarea__inner {
+            border-color: #444a55 !important;
+            box-shadow: none !important;
+        }
+        .dark .el-input__wrapper.is-focus,
+        .dark .el-input__inner:focus,
+        .dark .el-textarea__inner:focus,
+        .dark .el-input__wrapper:hover,
+        .dark .el-input__inner:hover,
+        .dark .el-textarea__inner:hover {
+            border-color: #5c6370 !important;
+            box-shadow: 0 0 0 1.5px #5c6370 !important;
+        }
+        .dark .el-form-item__label {
+            color: #aaa !important;
+        }
+        .infobar {
+            position:fixed;
+            left:30px;
+            top:20px;
+            z-index:1000;
+            background: var(--infobar-bg);
+            color: var(--infobar-text);
+            padding:12px 24px;
+            border-radius:8px;
+            box-shadow: var(--infobar-shadow);
+            min-width:180px;
+            transition: background 0.3s, color 0.3s;
+        }
+        .toggle-dark-btn {
+            background: var(--toggle-btn-bg) !important;
+            color: var(--toggle-btn-text) !important;
+            border: 1px solid var(--toggle-btn-border) !important;
+            box-shadow: 0 2px 8px var(--shadow);
+            transition: background 0.3s, color 0.3s, border 0.3s;
+        }
+        /* 夜间模式下 Element Plus 输入框/文本域边框彻底深色（终极修正） */
+        .dark .el-input__wrapper,
+        .dark .el-input__wrapper::before,
+        .dark .el-input__wrapper.is-focus::before,
+        .dark .el-input__wrapper:hover::before,
+        .dark .el-input__inner,
+        .dark .el-textarea__inner {
+            border-color: #444a55 !important;
+            border-width: 1.5px !important;
+            box-shadow: none !important;
+            background: #23272e !important;
+            color: #e0e0e0 !important;
+        }
+        .dark .el-input__wrapper.is-focus,
+        .dark .el-input__wrapper.is-focus::before,
+        .dark .el-input__wrapper:hover,
+        .dark .el-input__wrapper:hover::before,
+        .dark .el-input__inner:focus,
+        .dark .el-input__inner:hover,
+        .dark .el-textarea__inner:focus,
+        .dark .el-textarea__inner:hover {
+            border-color: #5c6370 !important;
+            box-shadow: 0 0 0 1.5px #5c6370 !important;
+        }
+        /* 彻底去除夜间模式下 el-input 双层边框，只保留一层深色边框 */
+        .dark .el-input__wrapper,
+        .dark .el-input__wrapper.is-focus,
+        .dark .el-input__wrapper:hover {
+            box-shadow: none !important;
+        }
+        .back-btn {
+            background: var(--back-btn-bg) !important;
+            color: var(--back-btn-text) !important;
+            border: 1.5px solid var(--back-btn-border) !important;
+            box-shadow: 0 2px 8px var(--shadow);
+            transition: background 0.3s, color 0.3s, border 0.3s;
         }
     </style>
 </head>
 <body>
 <div id="app">
+    <!-- 夜间模式切换按钮 -->
+    <el-button size="small" @click="toggleDark" class="toggle-dark-btn" style="position:fixed;right:24px;top:24px;z-index:2000;">
+        <span v-if="isDark">🌙 夜间</span><span v-else>☀️ 白天</span>
+    </el-button>
     <!-- 左上角信息栏 -->
-    <div style="position:fixed;left:30px;top:20px;z-index:1000;background:rgba(255,255,255,0.95);padding:12px 24px;border-radius:8px;box-shadow:0 2px 8px #eee;min-width:180px;">
+    <div class="infobar">
         <div style="font-size:16px;">🕒 时间：{{ currentTime }}</div>
         <div style="font-size:16px;margin-top:4px;">📦 卡片数：{{ cardCount }}</div>
     </div>
@@ -71,123 +250,121 @@
     <div class="container" v-else>
         <h1 style="text-align:center;">记忆卡片</h1>
         <el-button type="danger" @click="logout" style="float:right;margin-top:-50px;">登出</el-button>
-        <div class="main-flex-row">
-            <!-- 添加知识点 -->
-            <el-card style="flex:1 1 0;min-width:320px;max-width:400px;margin-bottom:0;" shadow="hover">
-                <h2 style="text-align:center; color:#007bff;">今天想添加什么知识点？</h2>
-                <el-form :model="addForm" @submit.native.prevent="addCard" label-width="60px" style="margin:20px auto 0 auto;">
-                    <el-form-item label="标题">
-                        <el-input v-model="addForm.title" required placeholder="请输入卡片标题"></el-input>
-                    </el-form-item>
-                    <el-form-item label="内容">
-                        <el-input type="textarea" v-model="addForm.content" :rows="3" required placeholder="请输入卡片内容"></el-input>
-                    </el-form-item>
-                    <el-form-item label="标签">
-                        <el-input v-model="addForm.tags" placeholder="如：英语,数学,编程"></el-input>
-                    </el-form-item>
-                    <el-form-item label="图片链接">
-                        <el-input v-model="addForm.img" placeholder="支持jpg网络图片链接"></el-input>
-                    </el-form-item>
-                    <el-form-item>
-                        <el-button type="primary" native-type="submit" style="width:100%;font-size:18px;">添加知识点</el-button>
-                    </el-form-item>
-                    <el-form-item v-if="addMsg">
-                        <el-alert :title="addMsg" type="success" show-icon></el-alert>
-                    </el-form-item>
-                </el-form>
-                <!-- 标签快速添加 -->
-                <div v-if="Object.keys(byTag).length" style="margin:10px 0 0 0;">
-                    <span style="font-size:14px;color:#888;">点击标签快速添加：</span>
-                    <el-tag v-for="tag in Object.keys(byTag)" :key="tag" style="margin:0 4px 4px 0;cursor:pointer;" @click="addTagToInput(tag)">{{ tag }}</el-tag>
-                </div>
-            </el-card>
-            <!-- 今日抽卡 -->
-            <el-card style="flex:1 1 0;min-width:320px;max-width:400px;margin-bottom:0;" shadow="hover">
-                <h2 style="text-align:center; color:#28a745;">今日份的抽卡！</h2>
-                <div style="text-align:center;">
-                    <el-button type="primary" @click="drawCard" style="font-size:18px;">抽卡</el-button>
-                </div>
-                <div id="card-area" style="margin-top:20px;">
-                    <div v-if="drawnCard">
-                        <el-card class="card">
-                            <strong>{{ drawnCard.title }}</strong>
-                            <span v-if="drawnCard.tags && drawnCard.tags.length">
-                                <el-tag v-for="tag in drawnCard.tags" :key="tag" style="margin-left:6px;vertical-align:middle;">{{ tag }}</el-tag>
-                            </span><br>
-                            <el-button type="info" @click="revealContent = !revealContent" v-if="!revealContent">显示内容</el-button>
-                            <div v-if="revealContent">
-                                <hr>
-                                <div v-if="drawnCard.content">{{ drawnCard.content }}</div>
-                                <div v-if="drawnCard.img">
-                                    <img :src="drawnCard.img" alt="卡片图片" style="max-width:100%;max-height:120px;margin:8px 0;border-radius:6px;box-shadow:0 1px 4px #ccc;cursor:pointer;" @click="showImgPreview(drawnCard.img)" />
-                                </div>
-                                <el-button type="success" @click="reviewCard('remember')">记住</el-button>
-                                <el-button type="warning" @click="reviewCard('forget')">忘记</el-button>
-                                <div style="margin-top:10px;">
-                                    <el-alert v-if="reviewMsg" :title="reviewMsg" type="success" show-icon></el-alert>
-                                </div>
+        <div v-if="!activeModule" class="main-menu-btns">
+            <el-button type="primary" @click="activeModule='add'">添加知识点</el-button>
+            <el-button type="success" @click="activeModule='draw'">今日份抽卡</el-button>
+            <el-button type="warning" @click="activeModule='all'">显示所有知识点</el-button>
+        </div>
+        <div v-if="activeModule==='add'" class="module-area">
+            <el-button type="info" @click="activeModule=null" class="back-btn" style="margin-bottom:16px;">返回</el-button>
+            <h2>添加知识点</h2>
+            <el-form :model="addForm" @submit.native.prevent="addCard" label-width="60px" style="margin:20px auto 0 auto;max-width:500px;">
+                <el-form-item label="标题">
+                    <el-input v-model="addForm.title" required placeholder="请输入卡片标题"></el-input>
+                </el-form-item>
+                <el-form-item label="内容">
+                    <el-input type="textarea" v-model="addForm.content" :rows="3" required placeholder="请输入卡片内容"></el-input>
+                </el-form-item>
+                <el-form-item label="标签">
+                    <el-input v-model="addForm.tags" placeholder="如：英语,数学,编程"></el-input>
+                </el-form-item>
+                <el-form-item label="图片链接">
+                    <el-input v-model="addForm.img" placeholder="支持jpg网络图片链接"></el-input>
+                </el-form-item>
+                <el-form-item>
+                    <el-button type="primary" native-type="submit" style="width:100%;font-size:18px;">添加知识点</el-button>
+                </el-form-item>
+                <el-form-item v-if="addMsg">
+                    <el-alert :title="addMsg" type="success" show-icon></el-alert>
+                </el-form-item>
+            </el-form>
+            <div v-if="Object.keys(byTag).length" style="margin:10px 0 0 0;max-width:500px;margin:auto;">
+                <span style="font-size:14px;color:#888;">点击标签快速添加：</span>
+                <el-tag v-for="tag in Object.keys(byTag)" :key="tag" style="margin:0 4px 4px 0;cursor:pointer;" @click="addTagToInput(tag)">{{ tag }}</el-tag>
+            </div>
+        </div>
+        <div v-if="activeModule==='draw'" class="module-area">
+            <el-button type="info" @click="activeModule=null" class="back-btn" style="margin-bottom:16px;">返回</el-button>
+            <h2>今日份抽卡</h2>
+            <div style="text-align:center;">
+                <el-button type="primary" @click="drawCard" style="font-size:22px;">抽卡</el-button>
+            </div>
+            <div id="card-area" style="margin-top:20px;">
+                <div v-if="drawnCard">
+                    <el-card class="card" style="font-size:1.2rem;">
+                        <strong>{{ drawnCard.title }}</strong>
+                        <span v-if="drawnCard.tags && drawnCard.tags.length">
+                            <el-tag v-for="tag in drawnCard.tags" :key="tag" style="margin-left:6px;vertical-align:middle;">{{ tag }}</el-tag>
+                        </span><br>
+                        <el-button type="info" @click="revealContent = !revealContent" v-if="!revealContent">显示内容</el-button>
+                        <div v-if="revealContent">
+                            <hr>
+                            <div v-if="drawnCard.content">{{ drawnCard.content }}</div>
+                            <div v-if="drawnCard.img">
+                                <img :src="drawnCard.img" alt="卡片图片" style="max-width:100%;max-height:180px;margin:8px 0;border-radius:6px;box-shadow:0 1px 4px #ccc;cursor:pointer;" @click="showImgPreview(drawnCard.img)" />
                             </div>
-                        </el-card>
-                    </div>
-                    <div v-else-if="drawMsg">
-                        <el-alert :title="drawMsg" type="info" show-icon></el-alert>
-                    </div>
-                </div>
-            </el-card>
-            <!-- 显示所有知识点 -->
-            <el-card style="flex:1 1 0;min-width:320px;max-width:400px;margin-bottom:0;" shadow="hover">
-                <h2 style="text-align:center; color:#ff9800;">显示我的所有知识点</h2>
-                <div style="text-align:center;">
-                    <el-button v-if="!showAllCards" type="primary" @click="fetchAllCardsAndShow" style="font-size:18px;">显示所有知识点</el-button>
-                    <el-button v-else type="info" @click="hideAllCards" style="font-size:18px;">收起所有知识点</el-button>
-                </div>
-                <div v-if="showAllCards">
-                    <div id="tag-filter-area" style="margin:10px 0;">
-                        <span v-if="Object.keys(byTag).length">
-                            <strong>按标签筛选：</strong>
-                            <el-tag v-for="tag in Object.keys(byTag)" :key="tag" @click="filterByTag(tag)" style="margin:0 4px;cursor:pointer;">{{ tag }}</el-tag>
-                            <el-tag v-if="tagFilter" type="danger" @click="filterByTag('')" style="margin-left:8px;cursor:pointer;">清除筛选</el-tag>
-                        </span>
-                    </div>
-                    <div v-if="allCards.length">
-                        <el-card class="card" v-for="card in filteredCards" :key="card.id" style="margin-bottom:12px;">
-                            <strong>标题：</strong><span class="card-title">{{ card.title }}</span><br>
-                            <strong>内容：</strong><span class="card-content">{{ card.content }}</span><br>
-                            <strong>图片：</strong>
-                            <div v-if="card.img">
-                                <img :src="card.img" alt="卡片图片" style="max-width:100%;max-height:120px;margin:8px 0;border-radius:6px;box-shadow:0 1px 4px #ccc;cursor:pointer;" @click="showImgPreview(card.img)" />
+                            <el-button type="success" @click="reviewCard('remember')">记住</el-button>
+                            <el-button type="warning" @click="reviewCard('forget')">忘记</el-button>
+                            <div style="margin-top:10px;">
+                                <el-alert v-if="reviewMsg" :title="reviewMsg" type="success" show-icon></el-alert>
                             </div>
-                            <strong>标签：</strong>
-                            <span class="card-tags">
-                                <el-tag v-for="tag in (card.tags||[])" :key="tag" size="small" style="margin-right:4px;">{{ tag }}</el-tag>
-                            </span><br>
-                            <el-button size="small" type="primary" @click="startEdit(card)">编辑</el-button>
-                            <el-button size="small" type="danger" @click="deleteCard(card.id)">删除</el-button>
-                            <div class="edit-form-area" v-if="editId === card.id" style="margin-top:10px;">
-                                <el-form :model="editForm" @submit.native.prevent="submitEdit(card.id)" label-width="40px">
-                                    <el-form-item label="标题">
-                                        <el-input v-model="editForm.title" required></el-input>
-                                    </el-form-item>
-                                    <el-form-item label="内容">
-                                        <el-input type="textarea" v-model="editForm.content" :rows="3" required></el-input>
-                                    </el-form-item>
-                                    <el-form-item label="标签">
-                                        <el-input v-model="editForm.tags"></el-input>
-                                    </el-form-item>
-                                    <el-form-item label="图片链接">
-                                        <el-input v-model="editForm.img" placeholder="支持jpg网络图片链接"></el-input>
-                                    </el-form-item>
-                                    <el-form-item>
-                                        <el-button type="success" native-type="submit">保存</el-button>
-                                        <el-button @click="cancelEdit">取消</el-button>
-                                    </el-form-item>
-                                </el-form>
-                            </div>
-                        </el-card>
-                    </div>
-                    <el-alert v-else :closable="false" type="info" show-icon>暂无卡片，请先添加！</el-alert>
+                        </div>
+                    </el-card>
                 </div>
-            </el-card>
+                <div v-else-if="drawMsg">
+                    <el-alert :title="drawMsg" type="info" show-icon></el-alert>
+                </div>
+            </div>
+        </div>
+        <div v-if="activeModule==='all'" class="module-area">
+            <el-button type="info" @click="activeModule=null" class="back-btn" style="margin-bottom:16px;">返回</el-button>
+            <h2>所有知识点</h2>
+            <!-- 饼图区域 -->
+            <div id="tag-pie-chart" style="width:100%;max-width:400px;height:320px;margin:0 auto 24px auto;"></div>
+            <div id="tag-filter-area" style="margin:10px 0;">
+                <span v-if="Object.keys(byTag).length">
+                    <strong>按标签筛选：</strong>
+                    <el-tag v-for="tag in Object.keys(byTag)" :key="tag" @click="filterByTag(tag)" style="margin:0 4px;cursor:pointer;">{{ tag }}</el-tag>
+                    <el-tag v-if="tagFilter" type="danger" @click="filterByTag('')" style="margin-left:8px;cursor:pointer;">清除筛选</el-tag>
+                </span>
+            </div>
+            <div v-if="allCards.length">
+                <el-card class="card" v-for="card in filteredCards" :key="card.id" style="margin-bottom:18px;font-size:1.1rem;">
+                    <strong>标题：</strong><span class="card-title">{{ card.title }}</span><br>
+                    <strong>内容：</strong><span class="card-content">{{ card.content }}</span><br>
+                    <strong>图片：</strong>
+                    <div v-if="card.img">
+                        <img :src="card.img" alt="卡片图片" style="max-width:100%;max-height:180px;margin:8px 0;border-radius:6px;box-shadow:0 1px 4px #ccc;cursor:pointer;" @click="showImgPreview(card.img)" />
+                    </div>
+                    <strong>标签：</strong>
+                    <span class="card-tags">
+                        <el-tag v-for="tag in (card.tags||[])" :key="tag" size="small" style="margin-right:4px;">{{ tag }}</el-tag>
+                    </span><br>
+                    <el-button size="large" type="primary" @click="startEdit(card)">编辑</el-button>
+                    <el-button size="large" type="danger" @click="deleteCard(card.id)">删除</el-button>
+                    <div class="edit-form-area" v-if="editId === card.id" style="margin-top:10px;">
+                        <el-form :model="editForm" @submit.native.prevent="submitEdit(card.id)" label-width="40px">
+                            <el-form-item label="标题">
+                                <el-input v-model="editForm.title" required></el-input>
+                            </el-form-item>
+                            <el-form-item label="内容">
+                                <el-input type="textarea" v-model="editForm.content" :rows="3" required></el-input>
+                            </el-form-item>
+                            <el-form-item label="标签">
+                                <el-input v-model="editForm.tags"></el-input>
+                            </el-form-item>
+                            <el-form-item label="图片链接">
+                                <el-input v-model="editForm.img" placeholder="支持jpg网络图片链接"></el-input>
+                            </el-form-item>
+                            <el-form-item>
+                                <el-button type="success" native-type="submit">保存</el-button>
+                                <el-button @click="cancelEdit">取消</el-button>
+                            </el-form-item>
+                        </el-form>
+                    </div>
+                </el-card>
+            </div>
+            <el-alert v-else :closable="false" type="info" show-icon>暂无卡片，请先添加！</el-alert>
         </div>
     </div>
 </div>
@@ -216,6 +393,8 @@ const app = createApp({
             imgPreviewUrl: '',
             showAllCards: false,
             cardCount: 0,
+            activeModule: null,
+            isDark: false,
         };
     },
     computed: {
@@ -224,11 +403,54 @@ const app = createApp({
             return this.allCards.filter(card => (card.tags || []).includes(this.tagFilter));
         }
     },
+    watch: {
+        activeModule(val) {
+            if (val === 'all') {
+                this.fetchAllCards();
+            }
+        },
+        allCards(cards) {
+            // 统计标签分布并渲染饼图
+            if (this.activeModule === 'all') {
+                const tagCount = {};
+                cards.forEach(card => {
+                    (card.tags || []).forEach(tag => {
+                        if (tag) tagCount[tag] = (tagCount[tag] || 0) + 1;
+                    });
+                });
+                const data = Object.keys(tagCount).map(tag => ({ name: tag, value: tagCount[tag] }));
+                const chartDom = document.getElementById('tag-pie-chart');
+                if (chartDom) {
+                    const myChart = echarts.init(chartDom);
+                    myChart.setOption({
+                        title: { text: '标签分布', left: 'center' },
+                        tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
+                        legend: { orient: 'vertical', left: 'left' },
+                        series: [{
+                            name: '标签',
+                            type: 'pie',
+                            radius: '60%',
+                            data,
+                            emphasis: {
+                                itemStyle: { shadowBlur: 10, shadowOffsetX: 0, shadowColor: 'rgba(0, 0, 0, 0.2)' }
+                            },
+                            label: { formatter: '{b}: {d}%' }
+                        }]
+                    });
+                }
+            }
+        }
+    },
     mounted() {
         this.checkLogin();
         this.fetchTagsOnly(); // 页面加载时只获取标签集合
         this.updateTime();
         setInterval(this.updateTime, 1000);
+        // 自动检测系统暗色模式
+        if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            this.isDark = true;
+            document.documentElement.classList.add('dark');
+        }
     },
     methods: {
         updateTime() {
@@ -402,6 +624,14 @@ const app = createApp({
             if (!tagsArr.includes(tag)) {
                 tagsArr.push(tag);
                 this.addForm.tags = tagsArr.join(', ');
+            }
+        },
+        toggleDark() {
+            this.isDark = !this.isDark;
+            if (this.isDark) {
+                document.documentElement.classList.add('dark');
+            } else {
+                document.documentElement.classList.remove('dark');
             }
         }
     }
