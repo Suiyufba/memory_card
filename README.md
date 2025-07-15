@@ -8,7 +8,7 @@
 ## 安装方法
 1. **克隆项目**
    ```bash
-   git clone <本项目地址>
+   git clone https://github.com/Suiyufba/memory_card.git
    cd memory_card
    ```
 2. **创建虚拟环境并安装依赖**
