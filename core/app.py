@@ -6,9 +6,16 @@ import time
 from datetime import datetime, timedelta
 import sqlite3
 import threading
+from werkzeug.security import check_password_hash, generate_password_hash
 
 app = Flask(__name__, template_folder='../html')
-app.secret_key = 'memory_card_secret_key'
+app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-change-me')
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE='Lax',
+    # 生产环境建议通过 HTTPS 部署并设置为 True；本地开发默认 False
+    SESSION_COOKIE_SECURE=os.environ.get('SESSION_COOKIE_SECURE', '0') == '1',
+)
 CARDS_FILE = os.path.join(os.path.dirname(__file__), '../cards.json')
 USERS_FILE = os.path.join(os.path.dirname(__file__), '../users.json')
 
@@ -29,7 +36,7 @@ class ConnectionPool:
             if self.connections:
                 return self.connections.pop()
             else:
-                conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+                conn = sqlite3.connect(DB_PATH, check_same_thread=False, timeout=10)
                 conn.row_factory = sqlite3.Row
                 # 启用WAL模式，提高并发读性能
                 conn.execute('PRAGMA journal_mode=WAL;')
@@ -80,6 +87,13 @@ class SimpleCache:
         with self.lock:
             if key in self.cache:
                 del self.cache[key]
+
+    def delete_prefix(self, prefix: str):
+        """删除以 prefix 开头的所有缓存 key（用于按用户清理分桶缓存）。"""
+        with self.lock:
+            keys_to_delete = [k for k in self.cache.keys() if k.startswith(prefix)]
+            for k in keys_to_delete:
+                del self.cache[k]
     
     def clear(self):
         with self.lock:
@@ -117,6 +131,9 @@ def init_db():
                 owner TEXT NOT NULL
             )
         ''')
+        # 索引（IF NOT EXISTS 保证重复执行安全）
+        c.execute('CREATE INDEX IF NOT EXISTS idx_cards_owner ON cards(owner)')
+        c.execute('CREATE INDEX IF NOT EXISTS idx_cards_owner_next_review ON cards(owner, next_review)')
         conn.commit()
     finally:
         return_db_connection(conn)
@@ -146,7 +163,8 @@ def get_user_by_username(username):
 def add_user(username, password):
     conn = get_db_connection()
     try:
-        conn.execute('INSERT INTO users (username, password) VALUES (?, ?)', (username, password))
+        password_hash = generate_password_hash(password)
+        conn.execute('INSERT INTO users (username, password) VALUES (?, ?)', (username, password_hash))
         conn.commit()
         # 清除相关缓存
         cache.delete(f"user:{username}")
@@ -251,7 +269,7 @@ def delete_card(card_id, owner):
         cache.delete(f"card:{card_id}:{owner}")
         cache.delete(f"cards:{owner}")
         cache.delete(f"tags:{owner}")
-        cache.delete(f"due_cards:{owner}")
+        cache.delete_prefix(f"due_cards:{owner}:")
     finally:
         return_db_connection(conn)
 
@@ -371,10 +389,24 @@ def login():
     username = data.get('username')
     password = data.get('password')
     user = get_user_by_username(username)
-    if user and user['password'] == password:
-        session['logged_in'] = True
-        session['username'] = username
-        return jsonify({'success': True, 'message': '登录成功'})
+    if user:
+        stored = user.get('password') or ''
+        is_hashed = stored.startswith('pbkdf2:') or stored.startswith('scrypt:') or stored.startswith('argon2:')
+        ok = check_password_hash(stored, password) if is_hashed else (stored == password)
+        # 兼容旧数据：明文密码登录成功后自动升级为 hash
+        if ok and (not is_hashed):
+            conn = get_db_connection()
+            try:
+                conn.execute('UPDATE users SET password = ? WHERE username = ?', (generate_password_hash(password), username))
+                conn.commit()
+            finally:
+                return_db_connection(conn)
+            cache.delete(f"user:{username}")
+        if ok:
+            session['logged_in'] = True
+            session['username'] = username
+            return jsonify({'success': True, 'message': '登录成功'})
+        return jsonify({'success': False, 'message': '用户名或密码错误'})
     else:
         return jsonify({'success': False, 'message': '用户名或密码错误'})
 
@@ -434,7 +466,17 @@ def draw_card():
         return jsonify({'success': False, 'message': '暂无到期卡片，请稍后再试或添加新卡片！'})
     card = random.choice(due_cards)
     is_manual = request.args.get('manual', 'true').lower() == 'true'
-    response_data = {'success': True, 'id': card['id'], 'title': card['title']}
+    # 直接返回完整卡片，避免前端为拿 content/img 再请求一次 /all_cards
+    response_data = {
+        'success': True,
+        'card': {
+            'id': card['id'],
+            'title': card['title'],
+            'content': card['content'],
+            'img': card['img'],
+            'tags': card['tags'].split(',') if card.get('tags') else [],
+        }
+    }
     if is_manual:
         new_count = increment_user_draw_count(session['username'])
         response_data['today_count'] = new_count
@@ -463,7 +505,7 @@ def review_card(card_id):
         updates['review_count'] = (card['review_count'] or 0) + 1
         update_card(card_id, session['username'], updates)
         # 清除到期卡片缓存（get_due_cards_by_owner 按小时分桶）
-        cache.delete(f"due_cards:{session['username']}:{now//3600}")
+        cache.delete_prefix(f"due_cards:{session['username']}:")
         return jsonify({'success': True, 'message': '复习结果已记录'})
     else:
         return jsonify({'success': False, 'message': '未找到卡片'})
@@ -541,9 +583,15 @@ def tag_statistics():
 def export_data():
     conn = get_db_connection()
     try:
-        users = [dict(row) for row in conn.execute('SELECT * FROM users')]
-        cards = [dict(row) for row in conn.execute('SELECT * FROM cards')]
-        return jsonify({'users': users, 'cards': cards})
+        owner = session['username']
+        cards = [dict(row) for row in conn.execute('SELECT * FROM cards WHERE owner = ?', (owner,))]
+        # 导出仅包含当前用户数据（不包含 password）
+        return jsonify({
+            'version': 2,
+            'exported_at': datetime.now().isoformat(timespec='seconds'),
+            'user': {'username': owner},
+            'cards': cards,
+        })
     finally:
         return_db_connection(conn)
 
@@ -552,27 +600,38 @@ def export_data():
 @login_required
 def import_data():
     data = request.get_json()
-    users = data.get('users', [])
-    cards = data.get('cards', [])
+    # 兼容旧格式：{users:[], cards:[]}；新格式：{user:{}, cards:[]}
+    owner = session['username']
+    cards = data.get('cards', []) or []
+    users = data.get('users', []) or []
     conn = get_db_connection()
     try:
         c = conn.cursor()
         # 使用事务提高导入性能
         c.execute('BEGIN TRANSACTION')
-        c.execute('DELETE FROM users')
-        c.execute('DELETE FROM cards')
-        
-        # 批量插入用户
+        # 只覆盖当前用户的数据：删除该用户的卡片
+        c.execute('DELETE FROM cards WHERE owner = ?', (owner,))
+        # 旧格式里包含 users 时，只允许更新当前用户的 draw_count/date（不导入 password）
         if users:
-            c.executemany('INSERT INTO users (username, password, today_draw_count, today_draw_date) VALUES (?, ?, ?, ?)',
-                         [(u['username'], u['password'], u.get('today_draw_count', 0), u.get('today_draw_date')) for u in users])
+            u = next((x for x in users if x.get('username') == owner), None)
+            if u is not None:
+                c.execute(
+                    'UPDATE users SET today_draw_count = ?, today_draw_date = ? WHERE username = ?',
+                    (u.get('today_draw_count', 0), u.get('today_draw_date'), owner)
+                )
         
         # 批量插入卡片
         if cards:
+            # 强制 owner 为当前用户（避免把别人的数据导进来 / 覆盖别人的 owner）
+            normalized = []
+            for card in cards:
+                card = dict(card)
+                card['owner'] = owner
+                normalized.append(card)
             c.executemany('''INSERT INTO cards (title, content, tags, img, review_count, next_review, last_review, interval_index, owner)
                              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''',
-                         [(card['title'], card['content'], card['tags'], card['img'], card.get('review_count', 0),
-                           card.get('next_review'), card.get('last_review'), card.get('interval_index', 0), card['owner']) for card in cards])
+                         [(card['title'], card['content'], card.get('tags', ''), card.get('img', ''), card.get('review_count', 0),
+                           card.get('next_review'), card.get('last_review'), card.get('interval_index', 0), card['owner']) for card in normalized])
         
         conn.commit()
         # 清除所有缓存

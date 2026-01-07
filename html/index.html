@@ -501,7 +501,7 @@
     <!-- 导入数据弹窗 -->
     <el-dialog v-model="showImportDialog" title="导入数据" width="400px">
         <input type="file" accept="application/json" @change="handleImportFile" />
-        <div style="margin-top:16px;">请选择导出的JSON文件，导入后将覆盖所有数据。</div>
+        <div style="margin-top:16px;">请选择导出的JSON文件，导入后将覆盖当前账号的数据。</div>
         <template #footer>
             <el-button @click="showImportDialog=false">取消</el-button>
         </template>
@@ -665,7 +665,15 @@ const app = createApp({
             const drawUrl = isManual ? '/draw?manual=true' : '/draw?manual=false';
             axios.get(drawUrl).then(res => {
                 if (res.data.success) {
-                    // 需要获取完整卡片内容和图片
+                    // 新后端：直接返回完整卡片，避免再请求 /all_cards
+                    if (res.data.card) {
+                        this.drawnCard = res.data.card;
+                        if (isManual && res.data.today_count !== undefined) {
+                            this.todayDrawCount = res.data.today_count;
+                        }
+                        return;
+                    }
+                    // 兼容旧后端：需要获取完整卡片内容和图片
                     axios.get('/all_cards').then(allRes => {
                         if (allRes.data.success && allRes.data.cards.length) {
                             const card = allRes.data.cards.find(c => c.id === res.data.id);
