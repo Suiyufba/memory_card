@@ -5,10 +5,7 @@ import random
 import time
 from datetime import datetime, timedelta
 import sqlite3
-import csv
-from collections import defaultdict
 import threading
-from functools import lru_cache
 
 app = Flask(__name__, template_folder='../html')
 app.secret_key = 'memory_card_secret_key'
@@ -465,8 +462,8 @@ def review_card(card_id):
         updates['last_review'] = now
         updates['review_count'] = (card['review_count'] or 0) + 1
         update_card(card_id, session['username'], updates)
-        # 清除到期卡片缓存
-        cache.delete(f"due_cards:{session['username']}")
+        # 清除到期卡片缓存（get_due_cards_by_owner 按小时分桶）
+        cache.delete(f"due_cards:{session['username']}:{now//3600}")
         return jsonify({'success': True, 'message': '复习结果已记录'})
     else:
         return jsonify({'success': False, 'message': '未找到卡片'})
