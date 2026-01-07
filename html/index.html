@@ -2,12 +2,13 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>Memory Card</title>
+    <title>记忆卡片</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
         body { font-family: Arial, sans-serif; margin: 40px; background: #f7f7f7; }
         .container { max-width: 500px; margin: auto; background: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 2px 8px #ccc; }
         h1 { text-align: center; }
+        .welcome { text-align: center; margin-bottom: 25px; color: #333; }
         .card { margin: 20px 0; padding: 20px; border: 1px solid #eee; border-radius: 6px; background: #fafafa; }
         .btn { padding: 8px 18px; border: none; border-radius: 4px; background: #007bff; color: #fff; cursor: pointer; }
         .btn:disabled { background: #aaa; }
@@ -17,49 +18,272 @@
     </style>
 </head>
 <body>
-<div class="container">
-    <h1>Memory Card</h1>
+<div class="container" id="login-container" style="display:none;">
+    <h1>记忆卡片</h1>
+    <div class="welcome">
+        <h2>请先登录</h2>
+    </div>
+    <form id="login-form">
+        <div class="form-group">
+            <label for="username">用户名</label>
+            <input type="text" id="username" name="username" required placeholder="请输入用户名">
+        </div>
+        <div class="form-group">
+            <label for="password">密码</label>
+            <input type="password" id="password" name="password" required placeholder="请输入密码">
+        </div>
+        <button class="btn" type="submit">登录</button>
+        <div id="login-msg" style="color:red;margin-top:10px;"></div>
+    </form>
+</div>
+<div class="container" id="main-container" style="display:none;">
+    <h1>记忆卡片</h1>
+    <button class="btn" id="logout-btn" style="float:right;margin-top:-50px;">登出</button>
+    <div class="welcome">
+        <h2>欢迎使用记忆卡片小工具！</h2>
+        <p>你可以添加自己的知识点或问题，然后随机抽取卡片进行记忆和复习。</p>
+    </div>
     <form method="post" action="/add">
         <div class="form-group">
-            <label for="title">Title</label>
-            <input type="text" id="title" name="title" required>
+            <label for="title">标题</label>
+            <input type="text" id="title" name="title" required placeholder="请输入卡片标题">
         </div>
         <div class="form-group">
-            <label for="content">Content</label>
-            <textarea id="content" name="content" rows="3" required></textarea>
+            <label for="content">内容</label>
+            <textarea id="content" name="content" rows="3" required placeholder="请输入卡片内容"></textarea>
         </div>
-        <button class="btn" type="submit">Add Card</button>
+        <div class="form-group">
+            <label for="tags">标签（用逗号分隔）</label>
+            <input type="text" id="tags" name="tags" placeholder="如：英语,数学,编程">
+        </div>
+        <button class="btn" type="submit">添加卡片</button>
     </form>
     <hr>
     <div id="draw-section">
-        <button class="btn" id="draw-btn">Draw a Card</button>
+        <button class="btn" id="draw-btn">抽一张卡片</button>
         <div id="card-area" style="margin-top:20px;"></div>
+    </div>
+    <hr>
+    <div id="all-section">
+        <button class="btn" id="all-btn">显示所有卡片</button>
+        <div id="tag-filter-area" style="margin:10px 0;"></div>
+        <div id="all-cards-area" style="margin-top:20px;"></div>
     </div>
 </div>
 <script>
-    const drawBtn = document.getElementById('draw-btn');
-    const cardArea = document.getElementById('card-area');
-    let currentCardId = null;
+function checkLogin() {
+    fetch('/all_cards').then(r => {
+        if (r.status === 401) {
+            document.getElementById('login-container').style.display = '';
+            document.getElementById('main-container').style.display = 'none';
+        } else {
+            document.getElementById('login-container').style.display = 'none';
+            document.getElementById('main-container').style.display = '';
+        }
+    });
+}
+checkLogin();
 
-    drawBtn.onclick = function() {
-        cardArea.innerHTML = '';
-        fetch('/draw').then(r => r.json()).then(data => {
-            if (!data.success) {
-                cardArea.innerHTML = '<div class="card">' + data.message + '</div>';
-                return;
+// 登录表单提交
+const loginForm = document.getElementById('login-form');
+if (loginForm) {
+    loginForm.onsubmit = function(e) {
+        e.preventDefault();
+        const username = document.getElementById('username').value.trim();
+        const password = document.getElementById('password').value.trim();
+        fetch('/login', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({username, password})
+        }).then(r => r.json()).then(res => {
+            if (res.success) {
+                checkLogin();
+            } else {
+                document.getElementById('login-msg').innerText = res.message;
             }
-            currentCardId = data.id;
-            cardArea.innerHTML = '<div class="card"><strong>' + data.title + '</strong><br><button class="btn" id="reveal-btn">Show Content</button><div id="content-area"></div></div>';
-            document.getElementById('reveal-btn').onclick = function() {
-                fetch('/reveal/' + currentCardId).then(r => r.json()).then(res => {
+        });
+    };
+}
+// 登出
+const logoutBtn = document.getElementById('logout-btn');
+if (logoutBtn) {
+    logoutBtn.onclick = function() {
+        fetch('/logout', {method: 'POST'}).then(() => {
+            checkLogin();
+        });
+    };
+}
+
+// 卡片相关功能
+const allBtn = document.getElementById('all-btn');
+const allCardsArea = document.getElementById('all-cards-area');
+const tagFilterArea = document.getElementById('tag-filter-area');
+
+function renderCards(cards) {
+    let html = '';
+    cards.forEach(card => {
+        html += `<div class='card' data-id='${card.id}'>
+            <strong>标题：</strong><span class='card-title'>${card.title}</span><br>
+            <strong>内容：</strong><span class='card-content'>${card.content}</span><br>
+            <strong>标签：</strong><span class='card-tags'>${(card.tags||[]).join(', ')}</span><br>
+            <button class='btn edit-btn' data-id='${card.id}'>编辑</button>
+            <button class='btn delete-btn' data-id='${card.id}'>删除</button>
+            <div class='edit-form-area'></div>
+        </div>`;
+    });
+    allCardsArea.innerHTML = html;
+    bindCardEvents();
+}
+
+function renderTagFilter(byTag) {
+    if (!byTag || Object.keys(byTag).length === 0) {
+        tagFilterArea.innerHTML = '';
+        return;
+    }
+    let html = '<strong>按标签筛选：</strong>';
+    for (let tag in byTag) {
+        html += `<button class='btn tag-filter-btn' data-tag='${tag}'>${tag}</button> `;
+    }
+    html += `<button class='btn' id='clear-tag-filter'>全部</button>`;
+    tagFilterArea.innerHTML = html;
+    document.querySelectorAll('.tag-filter-btn').forEach(btn => {
+        btn.onclick = function() {
+            fetch('/all_cards?tag=' + encodeURIComponent(this.getAttribute('data-tag'))).then(r => r.json()).then(data => {
+                if (!data.success || !data.cards.length) {
+                    allCardsArea.innerHTML = '<div class="card">暂无卡片，请先添加！</div>';
+                    return;
+                }
+                renderCards(data.cards);
+            });
+        };
+    });
+    document.getElementById('clear-tag-filter').onclick = function() {
+        allBtn.onclick();
+    };
+}
+
+function bindCardEvents() {
+    // 删除
+    document.querySelectorAll('.delete-btn').forEach(btn => {
+        btn.onclick = function() {
+            const id = this.getAttribute('data-id');
+            if (confirm('确定要删除这张卡片吗？')) {
+                fetch('/delete_card/' + id, {method: 'DELETE'}).then(r => r.json()).then(res => {
                     if (res.success) {
-                        document.getElementById('content-area').innerHTML = '<hr>' + res.content;
-                        this.disabled = true;
+                        allBtn.onclick();
+                    } else {
+                        alert('删除失败：' + (res.message || '未知错误'));
+                    }
+                });
+            }
+        };
+    });
+    // 编辑
+    document.querySelectorAll('.edit-btn').forEach(btn => {
+        btn.onclick = function() {
+            const id = this.getAttribute('data-id');
+            const cardDiv = this.closest('.card');
+            const title = cardDiv.querySelector('.card-title').innerText;
+            const content = cardDiv.querySelector('.card-content').innerText;
+            const tags = cardDiv.querySelector('.card-tags').innerText;
+            const formArea = cardDiv.querySelector('.edit-form-area');
+            if (formArea.innerHTML) return;
+            formArea.innerHTML = `
+                <form class='edit-form'>
+                    <div class='form-group'>
+                        <label>标题</label>
+                        <input type='text' name='title' value='${title}' required />
+                    </div>
+                    <div class='form-group'>
+                        <label>内容</label>
+                        <textarea name='content' rows='3' required>${content}</textarea>
+                    </div>
+                    <div class='form-group'>
+                        <label>标签（用逗号分隔）</label>
+                        <input type='text' name='tags' value='${tags}' />
+                    </div>
+                    <button class='btn' type='submit'>保存</button>
+                    <button class='btn cancel-edit' type='button'>取消</button>
+                </form>
+            `;
+            formArea.querySelector('.cancel-edit').onclick = function() {
+                formArea.innerHTML = '';
+            };
+            formArea.querySelector('.edit-form').onsubmit = function(e) {
+                e.preventDefault();
+                const newTitle = this.title.value.trim();
+                const newContent = this.content.value.trim();
+                const newTags = this.tags.value.split(',').map(t=>t.trim()).filter(t=>t);
+                fetch('/edit_card/' + id, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({title: newTitle, content: newContent, tags: newTags})
+                }).then(r => r.json()).then(res => {
+                    if (res.success) {
+                        allBtn.onclick();
+                    } else {
+                        alert('修改失败：' + (res.message || '未知错误'));
                     }
                 });
             };
-        });
-    };
+        };
+    });
+}
+
+allBtn.onclick = function() {
+    allCardsArea.innerHTML = '';
+    fetch('/all_cards').then(r => r.json()).then(data => {
+        if (!data.success || !data.cards.length) {
+            allCardsArea.innerHTML = '<div class="card">暂无卡片，请先添加！</div>';
+            renderTagFilter();
+            return;
+        }
+        renderCards(data.cards);
+        renderTagFilter(data.by_tag);
+    });
+};
+
+const drawBtn = document.getElementById('draw-btn');
+const cardArea = document.getElementById('card-area');
+let currentCardId = null;
+
+drawBtn.onclick = function() {
+    cardArea.innerHTML = '';
+    fetch('/draw').then(r => r.json()).then(data => {
+        if (!data.success) {
+            cardArea.innerHTML = '<div class="card">' + data.message + '</div>';
+            return;
+        }
+        currentCardId = data.id;
+        cardArea.innerHTML = `<div class="card"><strong>${data.title}</strong><br><button class="btn" id="reveal-btn">显示内容</button><div id="content-area"></div></div>`;
+        document.getElementById('reveal-btn').onclick = function() {
+            fetch('/reveal/' + currentCardId).then(r => r.json()).then(res => {
+                if (res.success) {
+                    document.getElementById('content-area').innerHTML = `<hr>${res.content}<br><button class='btn' id='remember-btn'>记住</button> <button class='btn' id='forget-btn'>忘记</button><div id='review-msg'></div>`;
+                    document.getElementById('remember-btn').onclick = function() {
+                        reviewCard('remember');
+                    };
+                    document.getElementById('forget-btn').onclick = function() {
+                        reviewCard('forget');
+                    };
+                }
+            });
+        };
+    });
+};
+
+function reviewCard(result) {
+    fetch('/review/' + currentCardId, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({result})
+    }).then(r => r.json()).then(res => {
+        document.getElementById('review-msg').innerText = res.message;
+        setTimeout(() => {
+            drawBtn.onclick(); // 自动进入下一个复习
+        }, 1000);
+    });
+}
 </script>
 </body>
 </html> 
