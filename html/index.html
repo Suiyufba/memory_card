@@ -3,287 +3,1076 @@
 <head>
     <meta charset="UTF-8">
     <title>记忆卡片</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+    <!-- Vue 3 CDN 多重备用 -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js" onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.prod.js'"></script>
+    <!-- Axios CDN 多重备用 -->
+    <script src="https://unpkg.com/axios/dist/axios.min.js" onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js'"></script>
+    <!-- Element Plus CDN 多重备用 -->
+    <link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css" onerror="this.onerror=null;this.href='https://cdn.jsdelivr.net/npm/element-plus/dist/index.css'">
+    <script src="https://unpkg.com/element-plus/dist/index.full.min.js" onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/element-plus/dist/index.full.min.js'"></script>
+    <!-- ECharts CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
     <style>
-        body { font-family: Arial, sans-serif; margin: 40px; background: #f7f7f7; }
-        .container { max-width: 500px; margin: auto; background: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 2px 8px #ccc; }
+        :root {
+            --bg: #f7f7f7;
+            --container-bg: #fff;
+            --text: #222;
+            --card-bg: #fafafa;
+            --border: #eee;
+            --shadow: #ccc;
+            --infobar-bg: rgba(255,255,255,0.95);
+            --infobar-text: #222;
+            --infobar-shadow: 0 2px 8px #eee;
+            --toggle-btn-bg: #f0f0f0;
+            --toggle-btn-text: #222;
+            --toggle-btn-border: #bbb;
+            --back-btn-bg: #fff;
+            --back-btn-text: #333;
+            --back-btn-border: #ccc;
+            --page-btn-bg: #fff;
+            --page-btn-text: #333;
+            --page-btn-border: #ccc;
+        }
+        .dark {
+            --bg: #181a1b;
+            --container-bg: #23272e;
+            --text: #e0e0e0;
+            --card-bg: #23272e;
+            --border: #333a44;
+            --shadow: #111;
+            --infobar-bg: rgba(40,42,50,0.98);
+            --infobar-text: #e0e0e0;
+            --infobar-shadow: 0 2px 16px #111;
+            --toggle-btn-bg: #23272e;
+            --toggle-btn-text: #e0e0e0;
+            --toggle-btn-border: #444a55;
+            --back-btn-bg: #23272e;
+            --back-btn-text: #e0e0e0;
+            --back-btn-border: #444a55;
+            --page-btn-bg: #23272e;
+            --page-btn-text: #e0e0e0;
+            --page-btn-border: #444a55;
+        }
+        body {
+            font-family: Arial, sans-serif;
+            margin: 40px;
+            background: var(--bg);
+            color: var(--text);
+        }
+        .container {
+            max-width: 1300px;
+            margin: auto;
+            background: var(--container-bg);
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px var(--shadow);
+        }
         h1 { text-align: center; }
-        .welcome { text-align: center; margin-bottom: 25px; color: #333; }
-        .card { margin: 20px 0; padding: 20px; border: 1px solid #eee; border-radius: 6px; background: #fafafa; }
+        .card {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: var(--card-bg);
+        }
         .btn { padding: 8px 18px; border: none; border-radius: 4px; background: #007bff; color: #fff; cursor: pointer; }
         .btn:disabled { background: #aaa; }
         .form-group { margin-bottom: 15px; }
         label { display: block; margin-bottom: 5px; }
-        input, textarea { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
+        input, textarea { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; background: var(--container-bg); color: var(--text); }
+        .main-flex-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 24px;
+            flex-wrap: nowrap;
+        }
+        .main-menu-btns {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 32px;
+            min-height: 60vh;
+            padding: 0 20px;
+        }
+        .main-menu-btns .el-button {
+            font-size: 2rem !important;
+            padding: 32px 20px !important;
+            width: 100% !important;
+            max-width: 400px;
+            min-width: 300px;
+            border-radius: 16px;
+            box-sizing: border-box;
+            text-align: center !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            white-space: nowrap !important;
+            overflow: hidden !important;
+            border: 2px solid transparent !important;
+            line-height: 1.2 !important;
+        }
+        /* 确保所有按钮类型样式一致 */
+        .main-menu-btns .el-button.el-button--primary,
+        .main-menu-btns .el-button.el-button--success,
+        .main-menu-btns .el-button.el-button--warning {
+            margin: 0 !important;
+            font-weight: 500 !important;
+            letter-spacing: 0.5px !important;
+        }
+        .module-area {
+            max-width: 600px;
+            margin: 32px auto;
+            padding: 24px 12px;
+            background: var(--container-bg);
+            border-radius: 16px;
+            box-shadow: 0 2px 12px var(--shadow);
+        }
+        .module-area h2 {
+            font-size: 2rem;
+            text-align: center;
+            margin-bottom: 24px;
+        }
+        @media (max-width: 600px) {
+            .main-menu-btns {
+                padding: 0 10px;
+            }
+            .main-menu-btns .el-button {
+                font-size: 1.3rem !important;
+                padding: 22px 15px !important;
+                width: 100% !important;
+                max-width: 100%;
+                min-width: 280px;
+                text-align: center !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+                white-space: nowrap !important;
+                overflow: hidden !important;
+                border: 2px solid transparent !important;
+                line-height: 1.2 !important;
+            }
+            .main-menu-btns .el-button.el-button--primary,
+            .main-menu-btns .el-button.el-button--success,
+            .main-menu-btns .el-button.el-button--warning {
+                margin: 0 !important;
+                font-weight: 500 !important;
+                letter-spacing: 0.3px !important;
+            }
+            .module-area {
+                max-width: 100vw;
+                margin: 12px 0;
+                border-radius: 0;
+                box-shadow: none;
+                padding: 8px 2px;
+            }
+        }
+        /* 适配 Element Plus 部分控件暗色 */
+        .dark .el-card, .dark .el-dialog, .dark .el-form, .dark .el-input__inner, .dark .el-alert, .dark .el-tag {
+            background: var(--container-bg) !important;
+            color: var(--text) !important;
+            border-color: var(--border) !important;
+        }
+        .dark .el-button--primary, .dark .el-button--success, .dark .el-button--warning, .dark .el-button--danger, .dark .el-button--info {
+            color: #fff !important;
+        }
+        .dark .el-input__wrapper,
+        .dark .el-input__inner,
+        .dark .el-textarea__inner {
+            border-color: #444a55 !important;
+            box-shadow: none !important;
+        }
+        .dark .el-input__wrapper.is-focus,
+        .dark .el-input__inner:focus,
+        .dark .el-textarea__inner:focus,
+        .dark .el-input__wrapper:hover,
+        .dark .el-input__inner:hover,
+        .dark .el-textarea__inner:hover {
+            border-color: #5c6370 !important;
+            box-shadow: 0 0 0 1.5px #5c6370 !important;
+        }
+        .dark .el-form-item__label {
+            color: #aaa !important;
+        }
+        .infobar {
+            position:fixed;
+            left:30px;
+            top:20px;
+            z-index:1000;
+            background: var(--infobar-bg);
+            color: var(--infobar-text);
+            padding:12px 24px;
+            border-radius:8px;
+            box-shadow: var(--infobar-shadow);
+            min-width:180px;
+            transition: background 0.3s, color 0.3s;
+        }
+        .toggle-dark-btn {
+            background: var(--toggle-btn-bg) !important;
+            color: var(--toggle-btn-text) !important;
+            border: 1px solid var(--toggle-btn-border) !important;
+            box-shadow: 0 2px 8px var(--shadow);
+            transition: background 0.3s, color 0.3s, border 0.3s;
+        }
+        /* 夜间模式下 Element Plus 输入框/文本域边框彻底深色（终极修正） */
+        .dark .el-input__wrapper,
+        .dark .el-input__wrapper::before,
+        .dark .el-input__wrapper.is-focus::before,
+        .dark .el-input__wrapper:hover::before,
+        .dark .el-input__inner,
+        .dark .el-textarea__inner {
+            border-color: #444a55 !important;
+            border-width: 1.5px !important;
+            box-shadow: none !important;
+            background: #23272e !important;
+            color: #e0e0e0 !important;
+        }
+        .dark .el-input__wrapper.is-focus,
+        .dark .el-input__wrapper.is-focus::before,
+        .dark .el-input__wrapper:hover,
+        .dark .el-input__wrapper:hover::before,
+        .dark .el-input__inner:focus,
+        .dark .el-input__inner:hover,
+        .dark .el-textarea__inner:focus,
+        .dark .el-textarea__inner:hover {
+            border-color: #5c6370 !important;
+            box-shadow: 0 0 0 1.5px #5c6370 !important;
+        }
+        /* 彻底去除夜间模式下 el-input 双层边框，只保留一层深色边框 */
+        .dark .el-input__wrapper,
+        .dark .el-input__wrapper.is-focus,
+        .dark .el-input__wrapper:hover {
+            box-shadow: none !important;
+        }
+        .back-btn {
+            background: var(--back-btn-bg) !important;
+            color: var(--back-btn-text) !important;
+            border: 1.5px solid var(--back-btn-border) !important;
+            box-shadow: 0 2px 8px var(--shadow);
+            transition: background 0.3s, color 0.3s, border 0.3s;
+        }
+        .page-btn {
+            background: var(--page-btn-bg) !important;
+            color: var(--page-btn-text) !important;
+            border: 1.5px solid var(--page-btn-border) !important;
+            box-shadow: 0 2px 8px var(--shadow);
+            transition: background 0.3s, color 0.3s, border 0.3s;
+        }
+        .page-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .page-jump-input .el-input__wrapper {
+            background: var(--page-btn-bg) !important;
+            border: 1.5px solid var(--page-btn-border) !important;
+            box-shadow: 0 2px 8px var(--shadow);
+            border-radius: 4px;
+        }
+        .page-jump-input .el-input__inner {
+            color: var(--page-btn-text) !important;
+            text-align: center;
+        }
+        .page-jump-input .el-input__wrapper:focus,
+        .page-jump-input .el-input__wrapper:hover {
+            border-color: #409eff !important;
+            box-shadow: 0 0 0 1px #409eff !important;
+        }
     </style>
 </head>
 <body>
-<div class="container" id="login-container" style="display:none;">
-    <h1>记忆卡片</h1>
-    <div class="welcome">
-        <h2>请先登录</h2>
+<div id="app">
+    <!-- 夜间模式切换按钮 -->
+    <el-button size="small" @click="toggleDark" class="toggle-dark-btn" style="position:fixed;right:24px;top:24px;z-index:2000;">
+        <span v-if="isDark">🌙 夜间</span><span v-else>☀️ 白天</span>
+    </el-button>
+    <!-- 左上角信息栏 -->
+    <div class="infobar">
+        <div style="font-size:16px;">🕒 时间：{{ currentTime }}</div>
+        <div style="font-size:16px;margin-top:4px;">📦 卡片数：{{ cardCount }}</div>
+        <div style="font-size:16px;margin-top:4px;">🎲 今日已抽卡：{{ todayDrawCount }}</div>
     </div>
-    <form id="login-form">
-        <div class="form-group">
-            <label for="username">用户名</label>
-            <input type="text" id="username" name="username" required placeholder="请输入用户名">
-        </div>
-        <div class="form-group">
-            <label for="password">密码</label>
-            <input type="password" id="password" name="password" required placeholder="请输入密码">
-        </div>
-        <button class="btn" type="submit">登录</button>
-        <div id="login-msg" style="color:red;margin-top:10px;"></div>
-    </form>
-</div>
-<div class="container" id="main-container" style="display:none;">
-    <h1>记忆卡片</h1>
-    <button class="btn" id="logout-btn" style="float:right;margin-top:-50px;">登出</button>
-    <div class="welcome">
-        <h2>欢迎使用记忆卡片小工具！</h2>
-        <p>你可以添加自己的知识点或问题，然后随机抽取卡片进行记忆和复习。</p>
+    <!-- 图片预览弹窗 -->
+    <el-dialog v-model="imgPreviewVisible" width="auto" :show-close="true" top="10vh" center>
+        <img :src="imgPreviewUrl" alt="预览图片" style="max-width:80vw;max-height:70vh;display:block;margin:auto;" />
+    </el-dialog>
+    <div class="container" v-if="!isLoggedIn">
+        <el-card shadow="hover">
+            <h1>记忆卡片</h1>
+            <div class="welcome">
+                <h2 v-if="!showRegister">请先登录</h2>
+                <h2 v-else>注册新用户</h2>
+            </div>
+            <el-form v-if="!showRegister" :model="loginForm" @submit.native.prevent="login" label-width="80px" style="max-width:400px;margin:auto;">
+                <el-form-item label="用户名">
+                    <el-input v-model="loginForm.username" placeholder="请输入用户名" required></el-input>
+                </el-form-item>
+                <el-form-item label="密码">
+                    <el-input v-model="loginForm.password" type="password" placeholder="请输入密码" required show-password></el-input>
+                </el-form-item>
+                <el-form-item>
+                    <el-button type="primary" native-type="submit" style="width:100%;font-size:18px;">登录</el-button>
+                </el-form-item>
+                <el-form-item>
+                    <el-button type="info" @click="showRegister=true" style="width:100%;font-size:16px;">注册新用户</el-button>
+                </el-form-item>
+                <el-form-item v-if="loginMsg">
+                    <el-alert :title="loginMsg" type="error" show-icon></el-alert>
+                </el-form-item>
+            </el-form>
+            <el-form v-else :model="registerForm" @submit.native.prevent="register" label-width="80px" style="max-width:400px;margin:auto;">
+                <el-form-item label="用户名">
+                    <el-input v-model="registerForm.username" placeholder="请输入用户名" required></el-input>
+                </el-form-item>
+                <el-form-item label="密码">
+                    <el-input v-model="registerForm.password" type="password" placeholder="请输入密码" required show-password></el-input>
+                </el-form-item>
+                <el-form-item>
+                    <el-button type="primary" native-type="submit" style="width:100%;font-size:18px;">注册</el-button>
+                </el-form-item>
+                <el-form-item>
+                    <el-button type="info" @click="showRegister=false" style="width:100%;font-size:16px;">返回登录</el-button>
+                </el-form-item>
+                <el-form-item v-if="registerMsg">
+                    <el-alert :title="registerMsg" :type="registerSuccess ? 'success' : 'error'" show-icon></el-alert>
+                </el-form-item>
+            </el-form>
+        </el-card>
     </div>
-    <form method="post" action="/add">
-        <div class="form-group">
-            <label for="title">标题</label>
-            <input type="text" id="title" name="title" required placeholder="请输入卡片标题">
+    <div class="container" v-else>
+        <h1 style="text-align:center;">记忆卡片</h1>
+        <el-button type="danger" @click="logout" style="float:right;margin-top:-50px;">登出</el-button>
+        <div v-if="!activeModule" class="main-menu-btns">
+            <el-button type="primary" @click="activeModule='add'">添加知识点</el-button>
+            <el-button type="success" @click="activeModule='draw'">今日份抽卡</el-button>
+            <el-button type="warning" @click="activeModule='all'">显示所有知识点</el-button>
         </div>
-        <div class="form-group">
-            <label for="content">内容</label>
-            <textarea id="content" name="content" rows="3" required placeholder="请输入卡片内容"></textarea>
+        <div v-if="activeModule==='add'" class="module-area">
+            <el-button type="info" @click="activeModule=null" class="back-btn" style="margin-bottom:16px;">返回</el-button>
+            <h2>添加知识点</h2>
+            <el-form :model="addForm" @submit.native.prevent="addCard" label-width="60px" style="margin:20px auto 0 auto;max-width:500px;">
+                <el-form-item label="标题">
+                    <el-input v-model="addForm.title" required placeholder="请输入卡片标题"></el-input>
+                </el-form-item>
+                <el-form-item label="内容">
+                    <el-input type="textarea" v-model="addForm.content" :rows="3" required placeholder="请输入卡片内容"></el-input>
+                </el-form-item>
+                <el-form-item label="标签">
+                    <el-input v-model="addForm.tags" placeholder="如：英语,数学,编程"></el-input>
+                </el-form-item>
+                <el-form-item label="图片链接">
+                    <el-input v-model="addForm.img" placeholder="支持jpg网络图片链接"></el-input>
+                </el-form-item>
+                <el-form-item>
+                    <el-button type="primary" native-type="submit" style="width:100%;font-size:18px;">添加知识点</el-button>
+                </el-form-item>
+                <el-form-item v-if="addMsg">
+                    <el-alert :title="addMsg" type="success" show-icon></el-alert>
+                </el-form-item>
+            </el-form>
+            <div v-if="Object.keys(byTag).length" style="margin:10px 0 0 0;max-width:500px;margin:auto;">
+                <span style="font-size:14px;color:#888;">点击标签快速添加：</span>
+                <el-tag v-for="tag in Object.keys(byTag)" :key="tag" style="margin:0 4px 4px 0;cursor:pointer;" @click="addTagToInput(tag)">{{ tag }}</el-tag>
+            </div>
         </div>
-        <div class="form-group">
-            <label for="tags">标签（用逗号分隔）</label>
-            <input type="text" id="tags" name="tags" placeholder="如：英语,数学,编程">
+        <div v-if="activeModule==='draw'" class="module-area">
+            <el-button type="info" @click="activeModule=null" class="back-btn" style="margin-bottom:16px;">返回</el-button>
+            <h2>今日份抽卡</h2>
+            <div style="text-align:center;">
+                <el-button type="primary" @click="drawCard" style="font-size:22px;">抽卡</el-button>
+            </div>
+            <div id="card-area" style="margin-top:20px;">
+                <div v-if="drawnCard">
+                    <el-card class="card" style="font-size:1.2rem;">
+                        <strong>{{ drawnCard.title }}</strong>
+                        <span v-if="drawnCard.tags && drawnCard.tags.length">
+                            <el-tag v-for="tag in drawnCard.tags" :key="tag" style="margin-left:6px;vertical-align:middle;">{{ tag }}</el-tag>
+                        </span><br>
+                        <el-button type="info" @click="revealContent = !revealContent" v-if="!revealContent">显示内容</el-button>
+                        <div v-if="revealContent">
+                            <hr>
+                            <div v-if="drawnCard.content">{{ drawnCard.content }}</div>
+                            <div v-if="drawnCard.img">
+                                <img :src="drawnCard.img" alt="卡片图片" style="max-width:100%;max-height:180px;margin:8px 0;border-radius:6px;box-shadow:0 1px 4px #ccc;cursor:pointer;" @click="showImgPreview(drawnCard.img)" />
+                            </div>
+                            <el-button type="success" @click="reviewCard('remember')">记住</el-button>
+                            <el-button type="warning" @click="reviewCard('forget')">忘记</el-button>
+                            <div style="margin-top:10px;">
+                                <el-alert v-if="reviewMsg" :title="reviewMsg" type="success" show-icon></el-alert>
+                            </div>
+                        </div>
+                    </el-card>
+                </div>
+                <div v-else-if="drawMsg">
+                    <el-alert :title="drawMsg" type="info" show-icon></el-alert>
+                </div>
+            </div>
         </div>
-        <button class="btn" type="submit">添加卡片</button>
-    </form>
-    <hr>
-    <div id="draw-section">
-        <button class="btn" id="draw-btn">抽一张卡片</button>
-        <div id="card-area" style="margin-top:20px;"></div>
+        <div v-if="activeModule==='all'" class="module-area">
+            <el-button type="info" @click="activeModule=null" class="back-btn" style="margin-bottom:16px;">返回</el-button>
+            <h2>所有知识点</h2>
+            <div style="margin-bottom:16px;text-align:right;">
+                <el-button
+                    :type="isDark ? 'primary' : 'info'"
+                    :style="isDark ? 'background:#333;color:#fff;border:none;' : ''"
+                    @click="exportData"
+                >导出数据</el-button>
+                <el-button
+                    :type="isDark ? 'primary' : 'info'"
+                    :style="isDark ? 'background:#333;color:#fff;border:none;' : ''"
+                    @click="showImportDialog=true"
+                >导入数据</el-button>
+            </div>
+            <!-- 饼图区域 -->
+            <div id="tag-pie-chart" style="width:100%;max-width:400px;height:320px;margin:0 auto 24px auto;"></div>
+            <div id="tag-filter-area" style="margin:10px 0;">
+                <span v-if="Object.keys(byTag).length">
+                    <strong>按标签筛选：</strong>
+                    <el-tag v-for="tag in Object.keys(byTag)" :key="tag" @click="filterByTag(tag)" style="margin:0 4px;cursor:pointer;">{{ tag }}</el-tag>
+                    <el-tag v-if="tagFilter" type="danger" @click="filterByTag('')" style="margin-left:8px;cursor:pointer;">清除筛选</el-tag>
+                </span>
+            </div>
+            <div v-if="allCards.length">
+                <el-card class="card" v-for="card in pagedCards" :key="card.id" style="margin-bottom:18px;font-size:1.1rem;">
+                    <strong>标题：</strong><span class="card-title">{{ card.title }}</span><br>
+                    <strong>内容：</strong><span class="card-content">{{ card.content }}</span><br>
+                    <strong>图片：</strong>
+                    <div v-if="card.img">
+                        <img :src="card.img" alt="卡片图片" style="max-width:100%;max-height:180px;margin:8px 0;border-radius:6px;box-shadow:0 1px 4px #ccc;cursor:pointer;" @click="showImgPreview(card.img)" />
+                    </div>
+                    <strong>标签：</strong>
+                    <span class="card-tags">
+                        <el-tag v-for="tag in (card.tags||[])" :key="tag" size="small" style="margin-right:4px;">{{ tag }}</el-tag>
+                    </span><br>
+                    <el-button size="large" type="primary" @click="startEdit(card)">编辑</el-button>
+                    <el-button size="large" type="danger" @click="deleteCard(card.id)">删除</el-button>
+                    <div class="edit-form-area" v-if="editId === card.id" style="margin-top:10px;">
+                        <el-form :model="editForm" @submit.native.prevent="submitEdit(card.id)" label-width="40px">
+                            <el-form-item label="标题">
+                                <el-input v-model="editForm.title" required></el-input>
+                            </el-form-item>
+                            <el-form-item label="内容">
+                                <el-input type="textarea" v-model="editForm.content" :rows="3" required></el-input>
+                            </el-form-item>
+                            <el-form-item label="标签">
+                                <el-input v-model="editForm.tags"></el-input>
+                            </el-form-item>
+                            <el-form-item label="图片链接">
+                                <el-input v-model="editForm.img" placeholder="支持jpg网络图片链接"></el-input>
+                            </el-form-item>
+                            <el-form-item>
+                                <el-button type="success" native-type="submit">保存</el-button>
+                                <el-button @click="cancelEdit">取消</el-button>
+                            </el-form-item>
+                        </el-form>
+                    </div>
+                </el-card>
+                <!-- 分页控件 -->
+                <div style="text-align:center;margin:18px 0;">
+                    <el-button class="page-btn" :disabled="pageNum===1" @click="pageNum--">上一页</el-button>
+                    <span style="margin:0 12px;">第 {{ pageNum }} / {{ totalPages }} 页</span>
+                    <el-button class="page-btn" :disabled="pageNum===totalPages" @click="pageNum++">下一页</el-button>
+                    
+                    <span style="margin:0 8px;">|</span>
+                    <span style="margin-right:8px;">跳转到</span>
+                    <el-input 
+                        v-model.number="jumpToPage" 
+                        class="page-jump-input"
+                        style="width:80px;display:inline-block;margin-right:8px;" 
+                        size="small" 
+                        :placeholder="'1-' + totalPages"
+                        @keydown.enter="jumpToPageMethod">
+                    </el-input>
+                    <span style="margin-right:8px;">页</span>
+                    <el-button class="page-btn" size="small" @click="jumpToPageMethod">跳转</el-button>
+                </div>
+            </div>
+            <el-alert v-else :closable="false" type="info" show-icon>暂无卡片，请先添加！</el-alert>
+        </div>
     </div>
-    <hr>
-    <div id="all-section">
-        <button class="btn" id="all-btn">显示所有卡片</button>
-        <div id="tag-filter-area" style="margin:10px 0;"></div>
-        <div id="all-cards-area" style="margin-top:20px;"></div>
+    <div v-if="showFireworks" style="position:fixed;left:0;top:0;width:100vw;height:100vh;z-index:3000;pointer-events:none;">
+        <canvas id="fireworks-canvas" style="width:100vw;height:100vh;display:block;"></canvas>
     </div>
+    <div v-if="showEggMsg" :style="{position:'fixed',left:0,top:0,width:'100vw',height:'100vh',zIndex:4000,display:'flex',alignItems:'center',justifyContent:'center',pointerEvents:'none'}">
+        <div :style="{fontSize:'2.2rem',color:'#fff',textShadow:'0 2px 16px #000',background:'transparent',padding:'32px 48px',borderRadius:'18px',opacity:eggMsgOpacity,transition:'opacity 2s'}">
+            愿记忆永存
+        </div>
+    </div>
+    <!-- 导入数据弹窗 -->
+    <el-dialog v-model="showImportDialog" title="导入数据" width="400px">
+        <input type="file" accept="application/json" @change="handleImportFile" />
+        <div style="margin-top:16px;">请选择导出的JSON文件，导入后将覆盖所有数据。</div>
+        <template #footer>
+            <el-button @click="showImportDialog=false">取消</el-button>
+        </template>
+    </el-dialog>
 </div>
 <script>
-function checkLogin() {
-    fetch('/all_cards').then(r => {
-        if (r.status === 401) {
-            document.getElementById('login-container').style.display = '';
-            document.getElementById('main-container').style.display = 'none';
-        } else {
-            document.getElementById('login-container').style.display = 'none';
-            document.getElementById('main-container').style.display = '';
+const { createApp } = Vue;
+const app = createApp({
+    data() {
+        return {
+            isLoggedIn: false,
+            loginForm: { username: '', password: '' },
+            loginMsg: '',
+            addForm: { title: '', content: '', tags: '', img: '' },
+            addMsg: '',
+            drawnCard: null,
+            revealContent: false,
+            drawMsg: '',
+            reviewMsg: '',
+            allCards: [],
+            allMsg: '',
+            byTag: {},
+            tagFilter: '',
+            editId: null,
+            editForm: { title: '', content: '', tags: '', img: '' },
+            currentTime: '',
+            imgPreviewVisible: false,
+            imgPreviewUrl: '',
+            showAllCards: false,
+            cardCount: 0,
+            activeModule: null,
+            isDark: false,
+            showRegister: false,
+            registerForm: { username: '', password: '' },
+            registerMsg: '',
+            registerSuccess: false,
+            todayDrawCount: 0,
+            pageNum: 1,
+            pageSize: 10,
+            jumpToPage: '',
+            toggleCount: 0,
+            toggleTimer: null,
+            showFireworks: false,
+            showEggMsg: false,
+            eggMsgOpacity: 0,
+            showImportDialog: false,
+        };
+    },
+    computed: {
+        filteredCards() {
+            if (!this.tagFilter) return this.allCards;
+            return this.allCards.filter(card => (card.tags || []).includes(this.tagFilter));
+        },
+        pagedCards() {
+            const start = (this.pageNum - 1) * this.pageSize;
+            return this.filteredCards.slice(start, start + this.pageSize);
+        },
+        totalPages() {
+            return Math.max(1, Math.ceil(this.filteredCards.length / this.pageSize));
         }
-    });
-}
-checkLogin();
-
-// 登录表单提交
-const loginForm = document.getElementById('login-form');
-if (loginForm) {
-    loginForm.onsubmit = function(e) {
-        e.preventDefault();
-        const username = document.getElementById('username').value.trim();
-        const password = document.getElementById('password').value.trim();
-        fetch('/login', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({username, password})
-        }).then(r => r.json()).then(res => {
-            if (res.success) {
-                checkLogin();
+    },
+    watch: {
+        activeModule(val) {
+            if (val === 'stats') {
+                this.activeModule = null; // 自动跳回主页面
+                return;
+            }
+            if (val === 'all') {
+                this.fetchAllCards();
+            }
+        },
+        allCards: {
+            handler(cards) {
+                if (this.activeModule === 'all') {
+                    this.$nextTick(() => {
+                        this.renderTagChart(cards);
+                    });
+                }
+            },
+            deep: true
+        },
+        tagFilter() {
+            this.pageNum = 1;
+        },
+        isDark(newVal) {
+            if (this.activeModule === 'stats') {
+                this.$nextTick(() => {
+                    // this.renderReviewLineChart(); // 移除
+                    // this.renderReviewPieChart(); // 移除
+                });
+            }
+        }
+    },
+    mounted() {
+        this.checkLogin();
+        this.fetchTagsOnly();
+        this.updateTime();
+        setInterval(this.updateTime, 1000);
+        if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            this.isDark = true;
+            document.documentElement.classList.add('dark');
+        }
+        // 渲染初始饼图
+        this.$nextTick(() => {
+            this.renderTagChart(this.allCards);
+        });
+    },
+    methods: {
+        updateTime() {
+            const now = new Date();
+            const pad = n => n.toString().padStart(2, '0');
+            this.currentTime = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+        },
+        checkLogin() {
+            axios.get('/all_cards').then(() => {
+                this.isLoggedIn = true;
+                this.loginMsg = '';
+                this.fetchTagsOnly(); // 登录成功后只获取标签集合
+                this.fetchTodayDrawCount(); // 获取今日抽卡数
+            }).catch(() => {
+                this.isLoggedIn = false;
+            });
+        },
+        login() {
+            this.loginMsg = '';
+            axios.post('/login', this.loginForm).then(res => {
+                if (res.data.success) {
+                    this.isLoggedIn = true;
+                    this.loginForm.password = '';
+                    this.fetchTodayDrawCount(); // 获取今日抽卡数
+                } else {
+                    this.loginMsg = res.data.message;
+                }
+            });
+        },
+        logout() {
+            axios.post('/logout').then(() => {
+                this.isLoggedIn = false;
+                this.loginForm.password = '';
+                this.todayDrawCount = 0; // 登出时重置为0显示
+            });
+        },
+        addCard() {
+            this.addMsg = '';
+            const form = new FormData();
+            form.append('title', this.addForm.title);
+            form.append('content', this.addForm.content);
+            form.append('tags', this.addForm.tags);
+            form.append('img', this.addForm.img);
+            axios.post('/add', form).then(() => {
+                this.addMsg = '添加成功！';
+                this.addForm = { title: '', content: '', tags: '', img: '' };
+                this.fetchTagsOnly(); // 新增：添加成功后刷新标签区
+                setTimeout(() => { this.addMsg = ''; }, 1500);
+            });
+        },
+        drawCard(isManual = true) {
+            this.drawnCard = null;
+            this.revealContent = false;
+            this.drawMsg = '';
+            const drawUrl = isManual ? '/draw?manual=true' : '/draw?manual=false';
+            axios.get(drawUrl).then(res => {
+                if (res.data.success) {
+                    // 需要获取完整卡片内容和图片
+                    axios.get('/all_cards').then(allRes => {
+                        if (allRes.data.success && allRes.data.cards.length) {
+                            const card = allRes.data.cards.find(c => c.id === res.data.id);
+                            if (card) {
+                                this.drawnCard = card;
+                            } else {
+                                this.drawnCard = { id: res.data.id, title: res.data.title };
+                            }
+                        } else {
+                            this.drawnCard = { id: res.data.id, title: res.data.title };
+                        }
+                        // 从后端API响应中更新今日抽卡数（只有手动抽卡才会增加）
+                        if (isManual && res.data.today_count !== undefined) {
+                            this.todayDrawCount = res.data.today_count;
+                        }
+                    });
+                } else {
+                    this.drawMsg = res.data.message;
+                }
+            });
+        },
+        reviewCard(result) {
+            axios.post(`/review/${this.drawnCard.id}`, { result }).then(res => {
+                this.reviewMsg = res.data.message;
+                setTimeout(() => {
+                    this.reviewMsg = '';
+                    this.drawnCard = null; // 清空当前卡片
+                    this.revealContent = false; // 收起内容
+                }, 1000);
+            });
+        },
+        fetchAllCards() {
+            this.allMsg = '';
+            this.allCards = [];
+            axios.get('/all_cards').then(res => {
+                if (res.data.success && res.data.cards.length) {
+                    this.allCards = res.data.cards;
+                    this.cardCount = res.data.cards.length;
+                    this.$nextTick(() => {
+                        this.renderTagChart(this.allCards);
+                    });
+                } else if (res.data.success && res.data.cards.length === 0) {
+                    this.allMsg = '暂无卡片，请先添加！';
+                    this.$nextTick(() => {
+                        this.renderTagChart([]);
+                    });
+                }
+            }).catch(err => {
+                if (err.response && err.response.status === 401) {
+                    this.allMsg = '请先登录查看卡片';
+                    this.isLoggedIn = false;
+                } else {
+                    this.allMsg = '加载卡片失败，请检查网络连接';
+                }
+                this.$nextTick(() => {
+                    this.renderTagChart([]);
+                });
+            });
+        },
+        fetchAllCardsAndShow() {
+            this.fetchAllCards();
+            this.showAllCards = true;
+        },
+        hideAllCards() {
+            this.showAllCards = false;
+            this.allCards = [];
+        },
+        fetchTagsOnly() {
+            axios.get('/all_cards').then(res => {
+                const cards = res.data.cards || [];
+                const byTag = {};
+                cards.forEach(card => {
+                    (card.tags || []).forEach(tag => {
+                        if (tag) byTag[tag] = byTag[tag] ? byTag[tag] + 1 : 1;
+                    });
+                });
+                this.byTag = byTag;
+                this.cardCount = cards.length;
+            }).catch(err => {
+                if (err.response && err.response.status === 401) {
+                    this.isLoggedIn = false;
+                }
+            });
+        },
+        fetchTodayDrawCount() {
+            axios.get('/today_draw_count').then(res => {
+                if (res.data.success) {
+                    this.todayDrawCount = res.data.count;
+                }
+            }).catch(err => {
+                if (err.response && err.response.status === 401) {
+                    this.isLoggedIn = false;
+                }
+            });
+        },
+        filterByTag(tag) {
+            this.tagFilter = tag;
+            this.allMsg = '';
+            // 不再请求后端，全部本地筛选
+        },
+        clearTagFilter() {
+            this.tagFilter = '';
+            this.fetchAllCards();
+        },
+        deleteCard(id) {
+            if (!confirm('确定要删除这张卡片吗？')) return;
+            axios.delete(`/delete_card/${id}`).then(res => {
+                if (res.data.success) {
+                    this.fetchAllCards();
+                } else {
+                    alert('删除失败：' + (res.data.message || '未知错误'));
+                }
+            });
+        },
+        startEdit(card) {
+            this.editId = card.id;
+            this.editForm = {
+                title: card.title,
+                content: card.content,
+                tags: (card.tags || []).join(', '),
+                img: card.img || ''
+            };
+        },
+        cancelEdit() {
+            this.editId = null;
+        },
+        submitEdit(id) {
+            const tags = this.editForm.tags.split(',').map(t=>t.trim()).filter(t=>t);
+            axios.post(`/edit_card/${id}`, {
+                title: this.editForm.title,
+                content: this.editForm.content,
+                tags,
+                img: this.editForm.img
+            }).then(res => {
+                if (res.data.success) {
+                    this.editId = null;
+                    this.fetchAllCards();
+                } else {
+                    alert('修改失败：' + (res.data.message || '未知错误'));
+                }
+            });
+        },
+        showImgPreview(url) {
+            this.imgPreviewUrl = url;
+            this.imgPreviewVisible = true;
+        },
+        addTagToInput(tag) {
+            let tagsArr = this.addForm.tags.split(',').map(t => t.trim()).filter(t => t);
+            if (!tagsArr.includes(tag)) {
+                tagsArr.push(tag);
+                this.addForm.tags = tagsArr.join(', ');
+            }
+        },
+        toggleDark() {
+            this.isDark = !this.isDark;
+            if (this.isDark) {
+                document.documentElement.classList.add('dark');
             } else {
-                document.getElementById('login-msg').innerText = res.message;
+                document.documentElement.classList.remove('dark');
             }
-        });
-    };
-}
-// 登出
-const logoutBtn = document.getElementById('logout-btn');
-if (logoutBtn) {
-    logoutBtn.onclick = function() {
-        fetch('/logout', {method: 'POST'}).then(() => {
-            checkLogin();
-        });
-    };
-}
-
-// 卡片相关功能
-const allBtn = document.getElementById('all-btn');
-const allCardsArea = document.getElementById('all-cards-area');
-const tagFilterArea = document.getElementById('tag-filter-area');
-
-function renderCards(cards) {
-    let html = '';
-    cards.forEach(card => {
-        html += `<div class='card' data-id='${card.id}'>
-            <strong>标题：</strong><span class='card-title'>${card.title}</span><br>
-            <strong>内容：</strong><span class='card-content'>${card.content}</span><br>
-            <strong>标签：</strong><span class='card-tags'>${(card.tags||[]).join(', ')}</span><br>
-            <button class='btn edit-btn' data-id='${card.id}'>编辑</button>
-            <button class='btn delete-btn' data-id='${card.id}'>删除</button>
-            <div class='edit-form-area'></div>
-        </div>`;
-    });
-    allCardsArea.innerHTML = html;
-    bindCardEvents();
-}
-
-function renderTagFilter(byTag) {
-    if (!byTag || Object.keys(byTag).length === 0) {
-        tagFilterArea.innerHTML = '';
-        return;
-    }
-    let html = '<strong>按标签筛选：</strong>';
-    for (let tag in byTag) {
-        html += `<button class='btn tag-filter-btn' data-tag='${tag}'>${tag}</button> `;
-    }
-    html += `<button class='btn' id='clear-tag-filter'>全部</button>`;
-    tagFilterArea.innerHTML = html;
-    document.querySelectorAll('.tag-filter-btn').forEach(btn => {
-        btn.onclick = function() {
-            fetch('/all_cards?tag=' + encodeURIComponent(this.getAttribute('data-tag'))).then(r => r.json()).then(data => {
-                if (!data.success || !data.cards.length) {
-                    allCardsArea.innerHTML = '<div class="card">暂无卡片，请先添加！</div>';
-                    return;
-                }
-                renderCards(data.cards);
+            // 彩蛋计数逻辑
+            if (!this.toggleTimer) {
+                this.toggleTimer = setTimeout(() => {
+                    this.toggleCount = 0;
+                    this.toggleTimer = null;
+                }, 10000);
+            }
+            this.toggleCount++;
+            if (this.toggleCount >= 5) {
+                this.toggleCount = 0;
+                clearTimeout(this.toggleTimer);
+                this.toggleTimer = null;
+                this.triggerFireworks();
+            }
+            if (this.activeModule === 'all') {
+                this.$nextTick(() => this.renderTagChart(this.allCards));
+            }
+        },
+        triggerFireworks() {
+            this.showFireworks = true;
+            this.$nextTick(() => {
+                this.launchFireworks();
             });
-        };
-    });
-    document.getElementById('clear-tag-filter').onclick = function() {
-        allBtn.onclick();
-    };
-}
-
-function bindCardEvents() {
-    // 删除
-    document.querySelectorAll('.delete-btn').forEach(btn => {
-        btn.onclick = function() {
-            const id = this.getAttribute('data-id');
-            if (confirm('确定要删除这张卡片吗？')) {
-                fetch('/delete_card/' + id, {method: 'DELETE'}).then(r => r.json()).then(res => {
-                    if (res.success) {
-                        allBtn.onclick();
-                    } else {
-                        alert('删除失败：' + (res.message || '未知错误'));
-                    }
-                });
+            setTimeout(() => {
+                this.showFireworks = false;
+                this.showEggMsg = true;
+                this.eggMsgOpacity = 0;
+                setTimeout(() => { this.eggMsgOpacity = 1; }, 50);
+                setTimeout(() => { this.eggMsgOpacity = 0; }, 2050);
+                setTimeout(() => { this.showEggMsg = false; }, 4050);
+            }, 3500);
+        },
+        launchFireworks() {
+            // 更绚烂的canvas烟花动画
+            const canvas = document.getElementById('fireworks-canvas');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            const W = window.innerWidth, H = window.innerHeight;
+            canvas.width = W; canvas.height = H;
+            let particles = [];
+            let trails = [];
+            function randomColor() {
+                // 渐变色
+                const h = Math.floor(Math.random()*360);
+                return [
+                    `hsl(${h},100%,60%)`,
+                    `hsl(${(h+40)%360},100%,70%)`,
+                    `hsl(${(h+80)%360},100%,80%)`
+                ];
             }
-        };
-    });
-    // 编辑
-    document.querySelectorAll('.edit-btn').forEach(btn => {
-        btn.onclick = function() {
-            const id = this.getAttribute('data-id');
-            const cardDiv = this.closest('.card');
-            const title = cardDiv.querySelector('.card-title').innerText;
-            const content = cardDiv.querySelector('.card-content').innerText;
-            const tags = cardDiv.querySelector('.card-tags').innerText;
-            const formArea = cardDiv.querySelector('.edit-form-area');
-            if (formArea.innerHTML) return;
-            formArea.innerHTML = `
-                <form class='edit-form'>
-                    <div class='form-group'>
-                        <label>标题</label>
-                        <input type='text' name='title' value='${title}' required />
-                    </div>
-                    <div class='form-group'>
-                        <label>内容</label>
-                        <textarea name='content' rows='3' required>${content}</textarea>
-                    </div>
-                    <div class='form-group'>
-                        <label>标签（用逗号分隔）</label>
-                        <input type='text' name='tags' value='${tags}' />
-                    </div>
-                    <button class='btn' type='submit'>保存</button>
-                    <button class='btn cancel-edit' type='button'>取消</button>
-                </form>
-            `;
-            formArea.querySelector('.cancel-edit').onclick = function() {
-                formArea.innerHTML = '';
-            };
-            formArea.querySelector('.edit-form').onsubmit = function(e) {
-                e.preventDefault();
-                const newTitle = this.title.value.trim();
-                const newContent = this.content.value.trim();
-                const newTags = this.tags.value.split(',').map(t=>t.trim()).filter(t=>t);
-                fetch('/edit_card/' + id, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({title: newTitle, content: newContent, tags: newTags})
-                }).then(r => r.json()).then(res => {
-                    if (res.success) {
-                        allBtn.onclick();
-                    } else {
-                        alert('修改失败：' + (res.message || '未知错误'));
+            function createFirework() {
+                const x = Math.random()*W*0.7+W*0.15, y = Math.random()*H*0.4+H*0.2;
+                const colorSet = randomColor();
+                const count = 80 + Math.floor(Math.random()*40); // 粒子更多
+                for (let i=0; i<count; i++) {
+                    const angle = (Math.PI*2/count)*i + Math.random()*0.05;
+                    const speed = Math.random()*5+3;
+                    const color = colorSet[i%colorSet.length];
+                    particles.push({
+                        x, y,
+                        vx: Math.cos(angle)*speed,
+                        vy: Math.sin(angle)*speed,
+                        alpha: 1,
+                        color,
+                        size: 2.5 + Math.random()*2.5,
+                        trail: []
+                    });
+                }
+            }
+            let fireworkCount = 0;
+            function animate() {
+                ctx.globalCompositeOperation = 'destination-out';
+                ctx.fillStyle = 'rgba(0,0,0,0.18)';
+                ctx.fillRect(0,0,W,H);
+                ctx.globalCompositeOperation = 'lighter';
+                particles.forEach(p => {
+                    // 绘制尾迹
+                    if (p.trail.length > 1) {
+                        ctx.save();
+                        ctx.beginPath();
+                        ctx.moveTo(p.trail[0][0], p.trail[0][1]);
+                        for (let t=1; t<p.trail.length; t++) {
+                            ctx.lineTo(p.trail[t][0], p.trail[t][1]);
+                        }
+                        ctx.strokeStyle = p.color;
+                        ctx.globalAlpha = 0.3*p.alpha;
+                        ctx.lineWidth = 2;
+                        ctx.stroke();
+                        ctx.restore();
                     }
+                    // 绘制粒子
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, p.size, 0, Math.PI*2);
+                    ctx.fillStyle = p.color;
+                    ctx.globalAlpha = p.alpha;
+                    ctx.shadowColor = p.color;
+                    ctx.shadowBlur = 18;
+                    ctx.fill();
+                    ctx.restore();
                 });
-            };
-        };
-    });
-}
-
-allBtn.onclick = function() {
-    allCardsArea.innerHTML = '';
-    fetch('/all_cards').then(r => r.json()).then(data => {
-        if (!data.success || !data.cards.length) {
-            allCardsArea.innerHTML = '<div class="card">暂无卡片，请先添加！</div>';
-            renderTagFilter();
-            return;
-        }
-        renderCards(data.cards);
-        renderTagFilter(data.by_tag);
-    });
-};
-
-const drawBtn = document.getElementById('draw-btn');
-const cardArea = document.getElementById('card-area');
-let currentCardId = null;
-
-drawBtn.onclick = function() {
-    cardArea.innerHTML = '';
-    fetch('/draw').then(r => r.json()).then(data => {
-        if (!data.success) {
-            cardArea.innerHTML = '<div class="card">' + data.message + '</div>';
-            return;
-        }
-        currentCardId = data.id;
-        cardArea.innerHTML = `<div class="card"><strong>${data.title}</strong><br><button class="btn" id="reveal-btn">显示内容</button><div id="content-area"></div></div>`;
-        document.getElementById('reveal-btn').onclick = function() {
-            fetch('/reveal/' + currentCardId).then(r => r.json()).then(res => {
-                if (res.success) {
-                    document.getElementById('content-area').innerHTML = `<hr>${res.content}<br><button class='btn' id='remember-btn'>记住</button> <button class='btn' id='forget-btn'>忘记</button><div id='review-msg'></div>`;
-                    document.getElementById('remember-btn').onclick = function() {
-                        reviewCard('remember');
-                    };
-                    document.getElementById('forget-btn').onclick = function() {
-                        reviewCard('forget');
-                    };
+                particles.forEach(p => {
+                    p.x += p.vx;
+                    p.y += p.vy;
+                    p.vy += 0.04 + Math.random()*0.01;
+                    p.vx *= 0.985;
+                    p.vy *= 0.985;
+                    p.alpha -= 0.012 + Math.random()*0.008;
+                    // 记录尾迹
+                    p.trail.push([p.x, p.y]);
+                    if (p.trail.length > 10) p.trail.shift();
+                });
+                particles = particles.filter(p => p.alpha > 0.05);
+                if (particles.length > 0 || fireworkCount < 5) {
+                    if (fireworkCount < 5 && Math.random() < 0.13) {
+                        createFirework();
+                        fireworkCount++;
+                    }
+                    requestAnimationFrame(animate);
+                }
+            }
+            createFirework();
+            animate();
+        },
+        register() {
+            this.registerMsg = '';
+            this.registerSuccess = false;
+            if (!this.registerForm.username || !this.registerForm.password) {
+                this.registerMsg = '用户名和密码不能为空';
+                return;
+            }
+            axios.post('/register', this.registerForm).then(res => {
+                if (res.data.success) {
+                    this.registerMsg = res.data.message;
+                    this.registerSuccess = true;
+                    this.isLoggedIn = true;
+                    this.loginForm.username = this.registerForm.username;
+                    this.registerForm = { username: '', password: '' };
+                    this.fetchTodayDrawCount(); // 获取今日抽卡数
+                    setTimeout(() => { this.showRegister = false; this.registerMsg = ''; }, 1000);
+                } else {
+                    this.registerMsg = res.data.message;
                 }
             });
-        };
-    });
-};
-
-function reviewCard(result) {
-    fetch('/review/' + currentCardId, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({result})
-    }).then(r => r.json()).then(res => {
-        document.getElementById('review-msg').innerText = res.message;
-        setTimeout(() => {
-            drawBtn.onclick(); // 自动进入下一个复习
-        }, 1000);
-    });
-}
+        },
+        renderTagChart(cards) {
+            const tagCount = {};
+            (cards || []).forEach(card => {
+                (card.tags || []).forEach(tag => {
+                    if (tag) tagCount[tag] = (tagCount[tag] || 0) + 1;
+                });
+            });
+            const data = Object.keys(tagCount).map(tag => ({ name: tag, value: tagCount[tag] }));
+            const fontColor = this.isDark ? '#fff' : '#222';
+            const chartDom = document.getElementById('tag-pie-chart');
+            if (chartDom) {
+                const myChart = echarts.init(chartDom);
+                const option = {
+                    title: { text: '标签分布', left: 'center', textStyle: { color: fontColor } },
+                    tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)', textStyle: { color: fontColor } },
+                    legend: {
+                        orient: 'vertical',
+                        left: 0,
+                        top: 60,
+                        textStyle: { color: fontColor }
+                    },
+                    series: [{
+                        name: '标签',
+                        type: 'pie',
+                        radius: '60%',
+                        center: ['60%', '50%'],
+                        data,
+                        label: {
+                            formatter: '{d}%',
+                            position: 'inside',
+                            fontSize: 14,
+                            color: fontColor
+                        },
+                        labelLine: { show: false },
+                        avoidLabelOverlap: false
+                    }]
+                };
+                myChart.setOption(option);
+            }
+        },
+        jumpToPageMethod() {
+            if (this.jumpToPage === '' || this.jumpToPage === null || this.jumpToPage === undefined) {
+                this.$message.warning('请输入页码');
+                return;
+            }
+            const targetPage = parseInt(this.jumpToPage);
+            if (isNaN(targetPage)) {
+                this.$message.error('请输入有效的数字');
+                this.jumpToPage = '';
+                return;
+            }
+            if (targetPage < 1) {
+                this.$message.error('页码不能小于1');
+                this.jumpToPage = '';
+                return;
+            }
+            if (targetPage > this.totalPages) {
+                this.$message.error(`页码不能大于总页数${this.totalPages}`);
+                this.jumpToPage = '';
+                return;
+            }
+            this.pageNum = targetPage;
+            this.jumpToPage = '';
+            this.$message.success(`已跳转到第${targetPage}页`);
+        },
+        exportData() {
+            axios.get('/export_data').then(res => {
+                const blob = new Blob([JSON.stringify(res.data, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'memory_card_data.json';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                this.$message.success('数据导出成功');
+            });
+        },
+        handleImportFile(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = evt => {
+                try {
+                    const data = JSON.parse(evt.target.result);
+                    axios.post('/import_data', data).then(res => {
+                        if (res.data.success) {
+                            this.$message.success('数据导入成功，页面将自动刷新');
+                            setTimeout(() => location.reload(), 1200);
+                        } else {
+                            this.$message.error(res.data.message || '导入失败');
+                        }
+                    });
+                } catch (err) {
+                    this.$message.error('文件格式错误');
+                }
+            };
+            reader.readAsText(file);
+        },
+    }
+});
+app.use(ElementPlus);
+app.mount('#app');
 </script>
-</body>
-</html> 
