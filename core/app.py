@@ -1,6 +1,5 @@
-from flask import Flask, render_template, request, redirect, url_for, jsonify, session, send_file
+from flask import Flask, request, redirect, url_for, jsonify, session, send_file
 import os
-import json
 import random
 import time
 from datetime import datetime, timedelta
@@ -16,9 +15,6 @@ app.config.update(
     # 生产环境建议通过 HTTPS 部署并设置为 True；本地开发默认 False
     SESSION_COOKIE_SECURE=os.environ.get('SESSION_COOKIE_SECURE', '0') == '1',
 )
-CARDS_FILE = os.path.join(os.path.dirname(__file__), '../cards.json')
-USERS_FILE = os.path.join(os.path.dirname(__file__), '../users.json')
-
 # 艾宾浩斯遗忘曲线推荐复习间隔（单位：天）
 EBBINGHAUS_INTERVALS = [0, 1, 2, 4, 7, 15, 30, 90, 180, 365]
 
@@ -134,6 +130,19 @@ def init_db():
         # 索引（IF NOT EXISTS 保证重复执行安全）
         c.execute('CREATE INDEX IF NOT EXISTS idx_cards_owner ON cards(owner)')
         c.execute('CREATE INDEX IF NOT EXISTS idx_cards_owner_next_review ON cards(owner, next_review)')
+        # 复习历史表
+        c.execute('''
+            CREATE TABLE IF NOT EXISTS review_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT NOT NULL,
+                card_id INTEGER NOT NULL,
+                result TEXT NOT NULL,
+                timestamp INTEGER NOT NULL
+            )
+        ''')
+        c.execute('CREATE INDEX IF NOT EXISTS idx_review_history_username ON review_history(username)')
+        c.execute('CREATE INDEX IF NOT EXISTS idx_review_history_card_id ON review_history(card_id)')
+        c.execute('CREATE INDEX IF NOT EXISTS idx_review_history_timestamp ON review_history(timestamp)')
         conn.commit()
     finally:
         return_db_connection(conn)
@@ -319,26 +328,6 @@ def get_tag_statistics(owner):
     finally:
         return_db_connection(conn)
 
-def load_cards():
-    if not os.path.exists(CARDS_FILE):
-        return []
-    with open(CARDS_FILE, 'r', encoding='utf-8') as f:
-        return json.load(f)
-
-def save_cards(cards):
-    with open(CARDS_FILE, 'w', encoding='utf-8') as f:
-        json.dump(cards, f, ensure_ascii=False, indent=2)
-
-def load_users():
-    if not os.path.exists(USERS_FILE):
-        return []
-    with open(USERS_FILE, 'r', encoding='utf-8') as f:
-        return json.load(f)
-
-def save_users(users):
-    with open(USERS_FILE, 'w', encoding='utf-8') as f:
-        json.dump(users, f, ensure_ascii=False, indent=2)
-
 def get_today_date():
     """获取今天的日期字符串，格式：YYYY-MM-DD"""
     return datetime.now().strftime('%Y-%m-%d')
@@ -425,6 +414,19 @@ def login_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
+@app.route('/me', methods=['GET'])
+@login_required
+def me():
+    user = get_user_by_username(session['username'])
+    if user:
+        return jsonify({
+            'success': True,
+            'username': user['username'],
+            'today_draw_count': user.get('today_draw_count', 0) or 0,
+            'today_draw_date': user.get('today_draw_date'),
+        })
+    return jsonify({'success': False, 'message': '用户不存在'}), 401
+
 @app.route('/', methods=['GET'])
 def index():
     return send_file('../html/index.html')
@@ -504,6 +506,16 @@ def review_card(card_id):
         updates['last_review'] = now
         updates['review_count'] = (card['review_count'] or 0) + 1
         update_card(card_id, session['username'], updates)
+        # 写入复习历史
+        conn = get_db_connection()
+        try:
+            conn.execute(
+                'INSERT INTO review_history (username, card_id, result, timestamp) VALUES (?, ?, ?, ?)',
+                (session['username'], card_id, result, now)
+            )
+            conn.commit()
+        finally:
+            return_db_connection(conn)
         # 清除到期卡片缓存（get_due_cards_by_owner 按小时分桶）
         cache.delete_prefix(f"due_cards:{session['username']}:")
         return jsonify({'success': True, 'message': '复习结果已记录'})
@@ -640,6 +652,109 @@ def import_data():
     except Exception as e:
         conn.rollback()
         return jsonify({'success': False, 'message': f'导入失败: {str(e)}'})
+    finally:
+        return_db_connection(conn)
+
+# 卡片计数（轻量接口）
+@app.route('/card_count', methods=['GET'])
+@login_required
+def card_count():
+    conn = get_db_connection()
+    try:
+        row = conn.execute('SELECT COUNT(*) as cnt FROM cards WHERE owner = ?', (session['username'],)).fetchone()
+        return jsonify({'success': True, 'count': row['cnt']})
+    finally:
+        return_db_connection(conn)
+
+# 搜索卡片
+@app.route('/search', methods=['GET'])
+@login_required
+def search_cards():
+    keyword = request.args.get('q', '').strip()
+    if not keyword:
+        return jsonify({'success': True, 'cards': []})
+    conn = get_db_connection()
+    try:
+        pattern = f'%{keyword}%'
+        cards = conn.execute('''
+            SELECT * FROM cards
+            WHERE owner = ? AND (title LIKE ? OR content LIKE ? OR tags LIKE ?)
+            ORDER BY id DESC
+        ''', (session['username'], pattern, pattern, pattern)).fetchall()
+        cards_list = []
+        for c in cards:
+            card = dict(c)
+            card['tags'] = card['tags'].split(',') if card['tags'] else []
+            cards_list.append(card)
+        return jsonify({'success': True, 'cards': cards_list})
+    finally:
+        return_db_connection(conn)
+
+# 复习进度概览（卡片阶段分布 + 待复习数）
+@app.route('/review_progress', methods=['GET'])
+@login_required
+def review_progress():
+    owner = session['username']
+    now = int(time.time())
+    conn = get_db_connection()
+    try:
+        total = conn.execute('SELECT COUNT(*) as cnt FROM cards WHERE owner = ?', (owner,)).fetchone()['cnt']
+        due = conn.execute(
+            'SELECT COUNT(*) as cnt FROM cards WHERE owner = ? AND (next_review IS NULL OR next_review <= ?)',
+            (owner, now)
+        ).fetchone()['cnt']
+        stages = conn.execute('''
+            SELECT
+                CASE
+                    WHEN interval_index = 0 THEN 'new'
+                    WHEN interval_index BETWEEN 1 AND 3 THEN 'learning'
+                    WHEN interval_index BETWEEN 4 AND 6 THEN 'reviewing'
+                    ELSE 'mastered'
+                END as stage,
+                COUNT(*) as cnt
+            FROM cards WHERE owner = ?
+            GROUP BY stage
+        ''', (owner,)).fetchall()
+        stage_dict = {row['stage']: row['cnt'] for row in stages}
+        return jsonify({
+            'success': True,
+            'total': total,
+            'due': due,
+            'stages': {
+                'new': stage_dict.get('new', 0),
+                'learning': stage_dict.get('learning', 0),
+                'reviewing': stage_dict.get('reviewing', 0),
+                'mastered': stage_dict.get('mastered', 0),
+            }
+        })
+    finally:
+        return_db_connection(conn)
+
+# 复习统计（近30天每日 remember/forget 次数）
+@app.route('/review_stats', methods=['GET'])
+@login_required
+def review_stats():
+    owner = session['username']
+    conn = get_db_connection()
+    try:
+        thirty_days_ago = int(time.time()) - 30 * 86400
+        rows = conn.execute('''
+            SELECT
+                date(timestamp, 'unixepoch', 'localtime') as review_date,
+                result,
+                COUNT(*) as cnt
+            FROM review_history
+            WHERE username = ? AND timestamp >= ?
+            GROUP BY review_date, result
+            ORDER BY review_date
+        ''', (owner, thirty_days_ago)).fetchall()
+        daily_stats = {}
+        for row in rows:
+            d = row['review_date']
+            if d not in daily_stats:
+                daily_stats[d] = {'remember': 0, 'forget': 0}
+            daily_stats[d][row['result']] = row['cnt']
+        return jsonify({'success': True, 'daily_stats': daily_stats})
     finally:
         return_db_connection(conn)
 
