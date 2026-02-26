@@ -1,11 +1,13 @@
 from flask import Flask, request, redirect, url_for, jsonify, session, send_file
 import os
+import uuid
 import random
 import time
 from datetime import datetime, timedelta
 import sqlite3
 import threading
 from werkzeug.security import check_password_hash, generate_password_hash
+from werkzeug.utils import secure_filename
 
 app = Flask(__name__, template_folder='../html')
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-change-me')
@@ -19,6 +21,9 @@ app.config.update(
 EBBINGHAUS_INTERVALS = [0, 1, 2, 4, 7, 15, 30, 90, 180, 365]
 
 DB_PATH = os.path.join(os.path.dirname(__file__), '../memory_card.db')
+UPLOAD_DIR = os.path.join(os.path.dirname(__file__), '../uploads')
+ALLOWED_IMG_EXT = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
+MAX_UPLOAD_SIZE = 5 * 1024 * 1024  # 5MB
 
 # 连接池管理
 class ConnectionPool:
@@ -26,28 +31,44 @@ class ConnectionPool:
         self.max_connections = max_connections
         self.connections = []
         self.lock = threading.Lock()
-    
+
+    def _create_connection(self):
+        conn = sqlite3.connect(DB_PATH, check_same_thread=False, timeout=10)
+        conn.row_factory = sqlite3.Row
+        conn.execute('PRAGMA journal_mode=WAL;')
+        conn.execute('PRAGMA synchronous=NORMAL;')
+        conn.execute('PRAGMA cache_size=10000;')
+        conn.execute('PRAGMA temp_store=memory;')
+        return conn
+
+    def _is_healthy(self, conn):
+        try:
+            conn.execute('SELECT 1')
+            return True
+        except Exception:
+            return False
+
     def get_connection(self):
         with self.lock:
-            if self.connections:
-                return self.connections.pop()
-            else:
-                conn = sqlite3.connect(DB_PATH, check_same_thread=False, timeout=10)
-                conn.row_factory = sqlite3.Row
-                # 启用WAL模式，提高并发读性能
-                conn.execute('PRAGMA journal_mode=WAL;')
-                # 优化读性能的设置
-                conn.execute('PRAGMA synchronous=NORMAL;')
-                conn.execute('PRAGMA cache_size=10000;')
-                conn.execute('PRAGMA temp_store=memory;')
-                return conn
-    
+            while self.connections:
+                conn = self.connections.pop()
+                if self._is_healthy(conn):
+                    return conn
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+            return self._create_connection()
+
     def return_connection(self, conn):
         with self.lock:
             if len(self.connections) < self.max_connections:
                 self.connections.append(conn)
             else:
-                conn.close()
+                try:
+                    conn.close()
+                except Exception:
+                    pass
 
 # 全局连接池
 connection_pool = ConnectionPool()
@@ -532,12 +553,34 @@ def reveal_card(card_id):
     else:
         return jsonify({'success': False, 'message': 'Card not found'})
 
-# 替换/all_cards接口
 @app.route('/all_cards', methods=['GET'])
 @login_required
 def all_cards():
-    cards = get_cards_by_owner(session['username'])
-    # 创建副本避免修改缓存中的原始数据
+    page = request.args.get('page', type=int)
+    size = request.args.get('size', type=int, default=20)
+    owner = session['username']
+    if page is not None and page >= 1:
+        conn = get_db_connection()
+        try:
+            total = conn.execute('SELECT COUNT(*) as cnt FROM cards WHERE owner = ?', (owner,)).fetchone()['cnt']
+            offset = (page - 1) * size
+            rows = conn.execute(
+                'SELECT * FROM cards WHERE owner = ? ORDER BY id DESC LIMIT ? OFFSET ?',
+                (owner, size, offset)
+            ).fetchall()
+            cards_list = []
+            for c in rows:
+                card = dict(c)
+                card['tags'] = card['tags'].split(',') if card['tags'] else []
+                cards_list.append(card)
+            return jsonify({
+                'success': True, 'cards': cards_list,
+                'total': total, 'page': page, 'size': size,
+                'total_pages': max(1, -(-total // size)),
+            })
+        finally:
+            return_db_connection(conn)
+    cards = get_cards_by_owner(owner)
     cards_copy = []
     for c in cards:
         card_copy = c.copy()
@@ -757,6 +800,123 @@ def review_stats():
         return jsonify({'success': True, 'daily_stats': daily_stats})
     finally:
         return_db_connection(conn)
+
+# 连续打卡天数
+@app.route('/streak', methods=['GET'])
+@login_required
+def streak():
+    owner = session['username']
+    conn = get_db_connection()
+    try:
+        rows = conn.execute('''
+            SELECT DISTINCT date(timestamp, 'unixepoch', 'localtime') as d
+            FROM review_history WHERE username = ?
+            ORDER BY d DESC
+        ''', (owner,)).fetchall()
+        if not rows:
+            return jsonify({'success': True, 'streak': 0, 'total_days': 0})
+        dates = [row['d'] for row in rows]
+        today = datetime.now().strftime('%Y-%m-%d')
+        streak_count = 0
+        check = today
+        for d in dates:
+            if d == check:
+                streak_count += 1
+                prev = datetime.strptime(check, '%Y-%m-%d') - timedelta(days=1)
+                check = prev.strftime('%Y-%m-%d')
+            elif d < check:
+                break
+        return jsonify({'success': True, 'streak': streak_count, 'total_days': len(dates)})
+    finally:
+        return_db_connection(conn)
+
+# 批量删除卡片
+@app.route('/batch_delete', methods=['POST'])
+@login_required
+def batch_delete():
+    data = request.get_json()
+    ids = data.get('ids', [])
+    if not ids or not isinstance(ids, list):
+        return jsonify({'success': False, 'message': '请选择要删除的卡片'})
+    owner = session['username']
+    conn = get_db_connection()
+    try:
+        placeholders = ','.join('?' * len(ids))
+        conn.execute(
+            f'DELETE FROM cards WHERE id IN ({placeholders}) AND owner = ?',
+            ids + [owner]
+        )
+        conn.commit()
+        cache.delete(f"cards:{owner}")
+        cache.delete(f"tags:{owner}")
+        cache.delete_prefix(f"due_cards:{owner}:")
+        for cid in ids:
+            cache.delete(f"card:{cid}:{owner}")
+        return jsonify({'success': True, 'message': f'已删除 {len(ids)} 张卡片'})
+    finally:
+        return_db_connection(conn)
+
+# 批量添加标签
+@app.route('/batch_tag', methods=['POST'])
+@login_required
+def batch_tag():
+    data = request.get_json()
+    ids = data.get('ids', [])
+    tag = (data.get('tag', '') or '').strip()
+    if not ids or not tag:
+        return jsonify({'success': False, 'message': '请选择卡片并输入标签'})
+    owner = session['username']
+    conn = get_db_connection()
+    try:
+        placeholders = ','.join('?' * len(ids))
+        cards = conn.execute(
+            f'SELECT id, tags FROM cards WHERE id IN ({placeholders}) AND owner = ?',
+            ids + [owner]
+        ).fetchall()
+        for card in cards:
+            existing = [t.strip() for t in (card['tags'] or '').split(',') if t.strip()]
+            if tag not in existing:
+                existing.append(tag)
+                conn.execute('UPDATE cards SET tags = ? WHERE id = ?', (','.join(existing), card['id']))
+        conn.commit()
+        cache.delete(f"cards:{owner}")
+        cache.delete(f"tags:{owner}")
+        for cid in ids:
+            cache.delete(f"card:{cid}:{owner}")
+        return jsonify({'success': True, 'message': f'已为 {len(cards)} 张卡片添加标签「{tag}」'})
+    finally:
+        return_db_connection(conn)
+
+# 图片上传
+@app.route('/upload_image', methods=['POST'])
+@login_required
+def upload_image():
+    if 'file' not in request.files:
+        return jsonify({'success': False, 'message': '未选择文件'})
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'success': False, 'message': '未选择文件'})
+    ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else ''
+    if ext not in ALLOWED_IMG_EXT:
+        return jsonify({'success': False, 'message': '不支持的格式，仅支持 png/jpg/gif/webp'})
+    file.seek(0, 2)
+    size = file.tell()
+    file.seek(0)
+    if size > MAX_UPLOAD_SIZE:
+        return jsonify({'success': False, 'message': '文件大小超过 5MB 限制'})
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
+    filename = f"{uuid.uuid4().hex}.{ext}"
+    file.save(os.path.join(UPLOAD_DIR, filename))
+    return jsonify({'success': True, 'url': f'/uploads/{filename}'})
+
+# 静态文件服务（上传的图片）
+@app.route('/uploads/<filename>')
+def serve_upload(filename):
+    safe = secure_filename(filename)
+    filepath = os.path.join(UPLOAD_DIR, safe)
+    if os.path.isfile(filepath):
+        return send_file(filepath)
+    return jsonify({'success': False, 'message': '文件不存在'}), 404
 
 if __name__ == '__main__':
     host = os.environ.get('HOST', '0.0.0.0')

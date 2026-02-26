@@ -21,6 +21,11 @@ ENV/
 
 # Database
 *.db
+*.db-shm
+*.db-wal
+
+# Uploads
+uploads/
 
 # Logs
 *.log
